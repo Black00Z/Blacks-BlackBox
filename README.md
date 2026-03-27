@@ -28,6 +28,9 @@ I made this fork to make the apps I actually care about usable in a virtualized 
 
 - Privacy-first behavior tightened in PackageManager surfaces, with an explicit opt-in compatibility fallback toggle (`host_signing_fallback`)
 
+## Changelog
+### 27.03.26
+Brave Browser now runs inside Black’s B-Box on Android 16 (launches successfully and reaches the home/new-tab screen).
 
 ## Current status
 
