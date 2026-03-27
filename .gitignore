@@ -1,0 +1,51 @@
+# Repository-safe ignore rules.
+# Keep only source, Gradle wrapper/build metadata, and required local library deps.
+
+# IDE / local machine state
+.idea/
+.vscode/
+*.iml
+.DS_Store
+local.properties
+
+# Gradle / Android generated output
+.gradle/
+build/
+**/build/
+**/bin/
+**/out/
+**/.cxx/
+**/.externalNativeBuild/
+captures/
+
+# Generated binaries and logs
+*.apk
+*.aab
+*.ap_
+*.dex
+*.log
+*.logcat
+logs/
+.debug_artifacts/
+
+# Local workspace / scratch content that should not go online
+.tmp_*/
+.venv-pdf/
+.github/
+Github/
+docs/
+tools/
+assets/
+inspiration/
+
+# Markdown notes and local instructions
+*.md
+!README.md
+copilot-instructions.md
+
+# Local test artifacts / personal files
+BlacksBlackBox.png
+InstaFlow_v24_Principal.apk
+
+# Historical one-off excludes
+app/release/

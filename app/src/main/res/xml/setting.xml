@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+        xmlns:app="http://schemas.android.com/apk/res-auto">
+
+
+
+    <PreferenceCategory app:title="@string/other">
+
+        <Preference
+                android:key="gms_manager"
+                android:title="@string/gms_manager"
+                android:summary="@string/jump_gms"/>
+
+
+
+        <SwitchPreferenceCompat
+                app:key="root_hide"
+                app:title="@string/hide_root" />
+
+        <SwitchPreferenceCompat
+                app:key="daemon_enable"
+                app:title="@string/daemon_enable" />
+
+        <SwitchPreferenceCompat
+                app:key="use_vpn_network"
+                app:title="@string/use_vpn_network"
+                app:summary="@string/use_vpn_network_summary" />
+
+        <SwitchPreferenceCompat
+                app:key="disable_flag_secure"
+                app:title="@string/disable_flag_secure"
+                app:summary="@string/disable_flag_secure_summary" />
+
+        <SwitchPreferenceCompat
+                app:key="dark_mode"
+                app:title="@string/dark_mode"
+                app:summary="@string/dark_mode_summary"
+                app:defaultValue="false" />
+
+        <SwitchPreferenceCompat
+                app:key="host_signing_fallback"
+                app:title="@string/host_signing_fallback_title"
+                app:summary="@string/host_signing_fallback_summary"
+                app:defaultValue="false" />
+
+        <Preference
+                android:key="send_logs"
+                android:title="@string/send_logs_title"
+                android:summary="@string/send_logs_summary" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory app:title="@string/about_title">
+
+        <Preference
+                android:key="about_owner"
+                android:title="@string/about_owner_title"
+                android:summary="@string/about_owner_summary" />
+
+        <Preference
+                android:key="about_newblackbox"
+                android:title="@string/about_newblackbox_title"
+                android:summary="@string/about_newblackbox_summary" />
+
+        <Preference
+                android:key="about_virtualapp"
+                android:title="@string/about_virtualapp_title"
+                android:summary="@string/about_virtualapp_summary" />
+
+        <Preference
+                android:key="about_blackreflection"
+                android:title="@string/about_blackreflection_title"
+                android:summary="@string/about_blackreflection_summary" />
+
+        <Preference
+                android:key="about_virtualapk"
+                android:title="@string/about_virtualapk_title"
+                android:summary="@string/about_virtualapk_summary" />
+
+        <Preference
+                android:key="about_xdl"
+                android:title="@string/about_xdl_title"
+                android:summary="@string/about_xdl_summary" />
+
+        <Preference
+                android:key="about_dobby"
+                android:title="@string/about_dobby_title"
+                android:summary="@string/about_dobby_summary" />
+
+        <Preference
+                android:key="about_freereflection"
+                android:title="@string/about_freereflection_title"
+                android:summary="@string/about_freereflection_summary" />
+
+        <Preference
+                android:key="about_ai_note"
+                android:title="@string/about_ai_note_title"
+                android:summary="@string/about_ai_note_summary" />
+
+    </PreferenceCategory>
+
+</PreferenceScreen>

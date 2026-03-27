@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+        xmlns:app="http://schemas.android.com/apk/res-auto"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="6dp"
+        android:layout_marginTop="6dp"
+        android:layout_marginEnd="6dp"
+        android:layout_marginBottom="6dp"
+        android:clickable="true"
+        android:focusable="true"
+        app:cardBackgroundColor="@color/surface"
+        app:cardCornerRadius="18dp"
+        app:cardElevation="0dp"
+        app:rippleColor="@color/surface_variant"
+        app:strokeColor="@color/surface_variant"
+        app:strokeWidth="1dp">
+
+    <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:paddingTop="14dp"
+            android:paddingBottom="12dp">
+
+        <FrameLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content">
+
+            <ImageView
+                    android:id="@+id/icon"
+                    android:layout_width="52dp"
+                    android:layout_height="52dp" />
+
+            <com.othershe.cornerlabelview.CornerLabelView
+                    android:id="@+id/cornerLabel"
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:layout_gravity="top|start"
+                    android:visibility="invisible"
+                    app:bg_color="@color/fab_tint"
+                    app:position="left_top"
+                    app:side_length="22dp"
+                    app:text="XP"
+                    app:text_color="@color/white"
+                    app:text_size="8sp" />
+        </FrameLayout>
+
+        <TextView
+                android:id="@+id/name"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:ellipsize="end"
+                android:gravity="center"
+                android:maxLines="2"
+                android:paddingStart="6dp"
+                android:paddingEnd="6dp"
+                android:textColor="@color/primary_text"
+                android:textSize="12sp" />
+
+    </LinearLayout>
+
+</com.google.android.material.card.MaterialCardView>

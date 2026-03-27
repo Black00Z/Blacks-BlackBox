@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="primary">#1F2937</color>
+    <color name="primary_dark">#111827</color>
+    <color name="primary_light">#4B5563</color>
+    <color name="accent">#ffffff</color>
+    <color name="primary_text">#111827</color>
+    <color name="secondary_text">#6B7280</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="background">#F4F7FB</color>
+    <color name="surface">#FFFFFFFF</color>
+    <color name="surface_variant">#E5ECF6</color>
+    <color name="on_surface">#0F172A</color>
+    <color name="fab_tint">#0EA5E9</color>
+    <color name="ic_launcher_adaptive_bg">#000000</color>
+</resources>
