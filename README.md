@@ -1,89 +1,76 @@
-# BlackBox - Virtual Engine
+# Blacks BlackBox - [▣] ᚠᛟᚱᚲ
 
-<p align="center">
-  <img src="assets/usage.gif" alt="BlackBox Banner" width="100%"/>
-</p>
+Android app virtualization fork focused on modern Android compatibility and practical validation workflows.
 
-BlackBox is a virtual engine that allows you to clone and run virtual applications on Android devices without installing APKs. This project works on Android 5.0 to 14.0+ and supports multiple architectures (ARM64, ARMv7, x86).
+**In short**: Android 14+ support, Android 16 network/compat hardening, QoL improvements, and slight privacy hardening!
 
-## Overview
 
-This enhanced edition includes bug fixes, stability improvements, and Android 14+ compatibility tailored for modern devices.
+## Why this fork? + Scope
 
-### Key Features
+I made this fork to make the apps I actually care about usable in a virtualized setup.
 
-*   **Virtual App Cloning**: Run multiple instances of applications.
-*   **Sandboxed Environment**: Isolated process execution.
-*   **No Root Required**: Runs entirely in userspace.
-*   **Multi-Architecture**: Support for 32-bit and 64-bit apps.
-*   **Device Spoofing**: Modify device information for virtual apps.
-*   **Fake Location**: Spoof GPS coordinates.
+- Priority target: BlackBox working in Work Profile + Instagram support
 
-## Requirements
+- Not everything works yet (and it might never fully do). This fork is deliberately focused on apps I use.
 
-*   **Android Version**: Android 5.0 (API 21) or higher.
-*   **RAM**: 2GB minimum recommended.
-*   **Architecture**: ARMv7a, ARM64-v8a, x86.
+- I *might* take requests if an app is genuinely needed.
+- No game support for now (it’s a whole different level of work).
 
-## Build Instructions
 
-### Prerequisites
-*   Android Studio (Arctic Fox or newer)
-*   JDK 17
-*   Android SDK 34+
-*   NDK (Version 29.0.13846066)
+## Changes vs BlackBox & NewBlackbox
 
-### Building from Source
+- Work profiles now work 100% in my validation path
+
+- Work-profile-aware smoke tooling available (see smoke_install_launch.sh) that targets the correct Android user/profile and produces logs + screenshots.
+- This was necessary because the old workflow was painful: install host → install target inside → debug one issue → repeat... (Super Annoying)
+
+- Android 14+/16 compatibility hardening via additional/updated system-service hooks (e.g. Credential Manager, IME/InputMethodManager, telephony registry)
+
+- Privacy-first behavior tightened in PackageManager surfaces, with an explicit opt-in compatibility fallback toggle (`host_signing_fallback`)
+
+## Changelog
+### 27.03.26
+Brave Browser now runs inside Black’s B-Box on Android 16 (launches successfully and reaches the home/new-tab screen).
+
+## Current status
+
+- Builds successfully with `:app:assembleDebug`
+- Targets physical ARM64 devices as the primary test path
+- Smoke install+launch flow validated for main + work profiles
+- VPN mode intentionally disabled on Android 14+ until full forwarding is implemented, it was simply not working
+
+
+## Project goals (maybe)
+
+- Improve Android 14+/16 app compatibility (system-service enforcement + crash fixes)
+- Keep validation practical: smoke install/launch runs that produce logs + screenshots
+- Support both main profile and work profiles (multi-user aware)
+- Prefer privacy-first defaults, with explicit opt-in compatibility fallbacks when needed
+
+
+## Quick start
 
 ```bash
-# Clone the repository
-git clone https://github.com/your-repo/NewBlackbox.git
-cd NewBlackbox
+./gradlew :app:assembleDebug
 
-# Build Debug APK
-./gradlew assembleDebug
-
-# Build Release APK
-./gradlew assembleRelease
+bash tools/smoke_install_launch.sh \
+  --serial YOUR_DEVICE_SERIAL \
+  --android-user-id 0 \
+  --user-id 0 \
+  --package-name com.instagram.android \
+  --minutes 1 \
+  /path/to/APK.apk
 ```
-
-## Integration
-
-To use BlackBox Core in your own project, add the AAR dependency:
-
-```gradle
-dependencies {
-    implementation fileTree(dir: "libs", include: ["*.aar"])
-}
-```
-
-Refer to `Docs.md` for detailed API documentation.
-
-## Troubleshooting
-
-*   **App Crashes**: Check logcat for UID mismatches or permission errors.
-*   **Installation Failures**: Verify potential architecture mismatches or storage permissions.
-*   **Android 15**: Ensure you are using the latest build which handles stricter security policies.
 
 ## Credits
 
-*   **Main Developer**: ALEX502
-*   **Original Framework**: VirtualApp, VirtualAPK
-*   **Native Hooks**: Dobby, xDL
-*   **Reflection**: BlackReflection, FreeReflection
+- Black00Z - Blacks BlackBox
+- ALEX5402 - NewBlackbox
+- asLody - VirtualApp
+- didi - VirtualAPK
+- jmpews - Dobby
+- hexhacking - xDL
+- CodingGay - BlackReflection
+- tiann - FreeReflection
 
-## License
-
-Copyright 2022 BlackBox
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-   http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+Made with (a lot of) Legacy Code and AI.
