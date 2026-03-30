@@ -29,6 +29,34 @@ I made this fork to make the apps I actually care about usable in a virtualized 
 - Privacy-first behavior tightened in PackageManager surfaces, with an explicit opt-in compatibility fallback toggle (`host_signing_fallback`)
 
 ## Changelog
+### 30.03.26 - 4.6 Update: Freezing, Device Spoofing, and Media Sharing
+
+#### Gallery . ݁₊ ⊹ . ݁˖ . ݁
+Added a ```Send to BlackBox Gallery``` share target that lets users send photos and videos from the phone’s gallery into the virtualized B-Box.
+
+Also includes a barebones gallery app inside Black's B-Box. It even plays videos!
+Barebones, but it works!
+
+#### Freeze ₊˚｡⋆❆⋆｡˚₊
+
+Added a freezer button that lets you instantly freeze and kill a running app.
+
+Ending Instagram doomscrolling with a single click. It is satisfying to do to be honest.
+>Settings -> ```Freeze App instantly```
+
+Also added an auto-freeze feature that can automatically freeze apps when you leave BlackBox.
+>Main view -> Snowflake button
+
+Lastly you can choose per app whether it should be excluded from auto-freeze, so selected apps stay running while everything else is frozen automatically. A bit janky, but it works.
+
+>Enable auto-freeze -> Long-press app in Black’s B-Box -> ```Freeze Options```
+
+#### 𝔻𝕖𝕧𝕚𝕔𝕖 𝕊𝕡𝕠𝕠𝕗𝕚𝕟𝕘
+
+Added device spoofing, so apps inside BlackBox can see a custom device model, manufacturer, and Android ID.
+>Main view -> More options menu -> ```Device Spoofing```
+---
+#### 
 ### 27.03.26
 Brave Browser now runs inside Black’s B-Box on Android 16 (launches successfully and reaches the home/new-tab screen).
 
