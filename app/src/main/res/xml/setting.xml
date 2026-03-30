@@ -43,6 +43,12 @@
                 app:summary="@string/host_signing_fallback_summary"
                 app:defaultValue="false" />
 
+        <SwitchPreferenceCompat
+                app:key="freeze_app_instantly"
+                app:title="@string/freeze_app_instantly_title"
+                app:summary="@string/freeze_app_instantly_summary"
+                app:defaultValue="false" />
+
         <Preference
                 android:key="send_logs"
                 android:title="@string/send_logs_title"

@@ -8,7 +8,10 @@ import top.niunaijun.blackbox.BlackBoxCore
 import top.niunaijun.blackbox.app.BActivityThread
 import top.niunaijun.blackbox.app.configuration.AppLifecycleCallback
 import top.niunaijun.blackbox.app.configuration.ClientConfiguration
+import top.niunaijun.blackbox.fake.device.DeviceSpoofManager
 import com.onebitmonochrome.blacksbbox.app.App
+import com.onebitmonochrome.blacksbbox.app.AppFreezeButtonManager
+import com.onebitmonochrome.blacksbbox.app.AppFreezeManager
 import com.onebitmonochrome.blacksbbox.app.rocker.RockerManager
 import com.onebitmonochrome.blacksbbox.biz.cache.AppSharedPreferenceDelegate
 
@@ -131,6 +134,7 @@ class BlackBoxLoader {
                                         userId: Int
                                 ) {
                                     try {
+                                        DeviceSpoofManager.applyToCurrentProcess(userId)
                                         Log.d(
                                                 TAG,
                                                 "beforeCreateApplication: pkg $packageName, processName $processName,userID:${BActivityThread.getUserId()}"
@@ -211,6 +215,64 @@ class BlackBoxLoader {
                                                 "Error in onStoragePermissionNeeded: ${e.message}"
                                         )
                                         return false
+                                    }
+                                }
+
+                                override fun onActivityStarted(activity: android.app.Activity) {
+                                    try {
+                                        AppFreezeButtonManager.sync(activity)
+                                        AppFreezeManager.onActivityStarted(
+                                                BActivityThread.getAppPackageName(),
+                                                BActivityThread.getUserId()
+                                        )
+                                    } catch (e: Exception) {
+                                        Log.e(TAG, "Error in onActivityStarted: ${e.message}")
+                                    }
+                                }
+
+                                override fun onActivityResumed(activity: android.app.Activity) {
+                                    try {
+                                        AppFreezeButtonManager.sync(activity)
+                                        AppFreezeManager.onActivityResumed(
+                                                BActivityThread.getAppPackageName(),
+                                                BActivityThread.getUserId()
+                                        )
+                                    } catch (e: Exception) {
+                                        Log.e(TAG, "Error in onActivityResumed: ${e.message}")
+                                    }
+                                }
+
+                                override fun onActivityStopped(activity: android.app.Activity) {
+                                    try {
+                                        AppFreezeManager.onActivityStopped(
+                                                BActivityThread.getAppPackageName(),
+                                                BActivityThread.getUserId(),
+                                                activity.isChangingConfigurations
+                                        )
+                                        if (!activity.isChangingConfigurations) {
+                                            AppFreezeButtonManager.remove(activity)
+                                        }
+                                    } catch (e: Exception) {
+                                        Log.e(TAG, "Error in onActivityStopped: ${e.message}")
+                                    }
+                                }
+
+                                override fun onActivityCreated(
+                                        activity: android.app.Activity,
+                                        savedInstanceState: android.os.Bundle?
+                                ) {
+                                    try {
+                                        AppFreezeButtonManager.sync(activity)
+                                    } catch (e: Exception) {
+                                        Log.e(TAG, "Error in onActivityCreated: ${e.message}")
+                                    }
+                                }
+
+                                override fun onActivityDestroyed(activity: android.app.Activity) {
+                                    try {
+                                        AppFreezeButtonManager.remove(activity)
+                                    } catch (e: Exception) {
+                                        Log.e(TAG, "Error in onActivityDestroyed: ${e.message}")
                                     }
                                 }
                             }

@@ -34,6 +34,7 @@ dependencyResolutionManagement {
 rootProject.name = "NewBlackbox"
 
 include ':app'
+include ':blackbox-gallery-stub'
 include(":black-reflection")
 include(":compiler")
 include ':Bcore'

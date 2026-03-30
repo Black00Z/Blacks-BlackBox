@@ -2,6 +2,7 @@ package com.onebitmonochrome.blacksbbox.view.main
 
 import android.content.Context
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.net.Uri
 import android.net.VpnService
 import android.os.Bundle
@@ -9,6 +10,8 @@ import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
+import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import androidx.viewpager2.widget.ViewPager2
 import com.afollestad.materialdialogs.MaterialDialog
@@ -16,14 +19,18 @@ import com.afollestad.materialdialogs.input.input
 import top.niunaijun.blackbox.BlackBoxCore
 import com.onebitmonochrome.blacksbbox.R
 import com.onebitmonochrome.blacksbbox.app.App
+import com.onebitmonochrome.blacksbbox.app.AppFreezeManager
 import com.onebitmonochrome.blacksbbox.app.AppManager
 import com.onebitmonochrome.blacksbbox.databinding.ActivityMainBinding
 import com.onebitmonochrome.blacksbbox.util.Resolution
 import com.onebitmonochrome.blacksbbox.util.inflate
+import com.onebitmonochrome.blacksbbox.util.toast
 import com.onebitmonochrome.blacksbbox.view.apps.AppsFragment
 import com.onebitmonochrome.blacksbbox.view.base.LoadingActivity
 import com.onebitmonochrome.blacksbbox.view.fake.FakeManagerActivity
+import com.onebitmonochrome.blacksbbox.view.gallery.BlackBoxGalleryActivity
 import com.onebitmonochrome.blacksbbox.view.list.ListActivity
+import com.onebitmonochrome.blacksbbox.view.spoof.DeviceSpoofingActivity
 import com.onebitmonochrome.blacksbbox.view.setting.SettingActivity
 
 class MainActivity : LoadingActivity() {
@@ -61,6 +68,7 @@ class MainActivity : LoadingActivity() {
             initToolbar(viewBinding.toolbarLayout.toolbar, R.string.app_name)
             initViewPager()
             initFab()
+            initFreezeFab()
             initToolbarSubTitle()
 
             
@@ -78,6 +86,15 @@ class MainActivity : LoadingActivity() {
             Log.e(TAG, "Critical error in onCreate: ${e.message}")
             
             showErrorDialog("Failed to initialize app: ${e.message}")
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        try {
+            updateFreezeFabState()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error refreshing freeze FAB state: ${e.message}")
         }
     }
 
@@ -370,14 +387,83 @@ class MainActivity : LoadingActivity() {
         }
     }
 
+    private fun initFreezeFab() {
+        try {
+            updateFreezeFabState()
+            viewBinding.freezeFab.setOnClickListener {
+                try {
+                    if (AppFreezeManager.isGlobalAutoFreezeEnabled()) {
+                        AppFreezeManager.setGlobalAutoFreezeEnabled(false)
+                        updateFreezeFabState()
+                        toast(R.string.auto_freeze_master_disabled)
+                    } else {
+                        AlertDialog.Builder(this)
+                                .setTitle(R.string.auto_freeze_toggle_title)
+                                .setMessage(R.string.auto_freeze_toggle_message)
+                                .setPositiveButton(R.string.enable) { _, _ ->
+                                    AppFreezeManager.setGlobalAutoFreezeEnabled(true)
+                                    updateFreezeFabState()
+                                    toast(R.string.auto_freeze_master_enabled)
+                                }
+                                .setNegativeButton(R.string.cancel, null)
+                                .show()
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error toggling auto-freeze: ${e.message}")
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in initFreezeFab: ${e.message}")
+        }
+    }
+
+    private fun updateFreezeFabState() {
+        val enabled = AppFreezeManager.isGlobalAutoFreezeEnabled()
+        viewBinding.freezeFab.setImageResource(
+                if (enabled) R.drawable.ic_snowflake else R.drawable.ic_snowflake_off
+        )
+        viewBinding.freezeFab.imageTintList = null
+        viewBinding.freezeFab.backgroundTintList =
+                ColorStateList.valueOf(
+                        ContextCompat.getColor(
+                                this,
+                                if (enabled) {
+                                    R.color.fab_tint
+                                } else {
+                                    R.color.surface_variant
+                                }
+                        )
+                )
+        viewBinding.freezeFab.contentDescription =
+                getString(
+                        if (enabled) {
+                            R.string.auto_freeze_toggle_on
+                        } else {
+                            R.string.auto_freeze_toggle_off
+                        }
+                )
+    }
+
     fun showFloatButton(show: Boolean) {
         try {
             val tranY: Float = Resolution.convertDpToPixel(120F, App.getContext())
             val time = 200L
             if (show) {
                 viewBinding.fab.animate().translationY(0f).alpha(1f).setDuration(time).start()
+                viewBinding.freezeFab
+                        .animate()
+                        .translationY(0f)
+                        .alpha(1f)
+                        .setDuration(time)
+                        .start()
             } else {
                 viewBinding.fab.animate().translationY(tranY).alpha(0f).setDuration(time).start()
+                viewBinding.freezeFab
+                        .animate()
+                        .translationY(tranY)
+                        .alpha(0f)
+                        .setDuration(time)
+                        .start()
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error in showFloatButton: ${e.message}")
@@ -458,6 +544,12 @@ class MainActivity : LoadingActivity() {
                     val intent = Intent(this, FakeManagerActivity::class.java)
                     intent.putExtra("userID", 0)
                     startActivity(intent)
+                }
+                R.id.device_spoofing -> {
+                    DeviceSpoofingActivity.start(this, currentUser)
+                }
+                R.id.blackbox_gallery -> {
+                    BlackBoxGalleryActivity.start(this, currentUser)
                 }
             }
 

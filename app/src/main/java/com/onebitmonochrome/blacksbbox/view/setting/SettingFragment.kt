@@ -15,6 +15,7 @@ import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.SwitchPreferenceCompat
 import top.niunaijun.blackbox.BlackBoxCore
 import com.onebitmonochrome.blacksbbox.R
+import com.onebitmonochrome.blacksbbox.app.AppFreezeManager
 import com.onebitmonochrome.blacksbbox.app.AppManager
 import com.onebitmonochrome.blacksbbox.util.toast
 import com.onebitmonochrome.blacksbbox.view.gms.GmsManagerActivity
@@ -51,6 +52,7 @@ class SettingFragment : PreferenceFragmentCompat() {
         initDarkMode()
 
         initHostSigningFallback()
+        initInstantFreezeButton()
 
         if (Build.VERSION.SDK_INT >= 34) {
             val vpnPref = findPreference<SwitchPreferenceCompat>("use_vpn_network")
@@ -142,6 +144,48 @@ class SettingFragment : PreferenceFragmentCompat() {
                 .show()
 
             // Cancel immediate enabling; we'll apply it if the user confirms.
+            false
+        }
+    }
+
+    private fun initInstantFreezeButton() {
+        val pref = findPreference<SwitchPreferenceCompat>("freeze_app_instantly") ?: return
+        pref.isChecked = AppFreezeManager.isInstantFreezeButtonEnabled()
+
+        var programmaticChange = false
+        pref.setOnPreferenceChangeListener { _, newValue ->
+            if (programmaticChange) {
+                return@setOnPreferenceChangeListener true
+            }
+
+            val enable = (newValue == true)
+            if (!enable) {
+                AppFreezeManager.setInstantFreezeButtonEnabled(false)
+                return@setOnPreferenceChangeListener true
+            }
+
+            AlertDialog.Builder(requireContext())
+                    .setTitle(R.string.freeze_app_instantly_dialog_title)
+                    .setMessage(R.string.freeze_app_instantly_dialog_message)
+                    .setPositiveButton(R.string.enable) { _, _ ->
+                        AppFreezeManager.setInstantFreezeButtonEnabled(true)
+                        programmaticChange = true
+                        try {
+                            pref.isChecked = true
+                        } finally {
+                            programmaticChange = false
+                        }
+                    }
+                    .setNegativeButton(R.string.cancel) { _, _ ->
+                        programmaticChange = true
+                        try {
+                            pref.isChecked = false
+                        } finally {
+                            programmaticChange = false
+                        }
+                    }
+                    .show()
+
             false
         }
     }

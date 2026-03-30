@@ -14,6 +14,7 @@
 #include <Hook/DexFileHook.h>
 #include <Hook/RuntimeHook.h>
 #include "Utils/HexDump.h"
+#include "Utils/VirtualSpoof.h"
 #include "hidden_api.h"
 
 struct {
@@ -131,6 +132,33 @@ bool disableResourceLoading(JNIEnv *env, jclass clazz) {
     return true;
 }
 
+void setDeviceSpoof(JNIEnv *env, jclass clazz,
+                    jstring manufacturer,
+                    jstring brand,
+                    jstring model,
+                    jstring device,
+                    jstring product,
+                    jstring fingerprint,
+                    jstring serial) {
+    const char *c_manufacturer = manufacturer ? env->GetStringUTFChars(manufacturer, JNI_FALSE) : nullptr;
+    const char *c_brand = brand ? env->GetStringUTFChars(brand, JNI_FALSE) : nullptr;
+    const char *c_model = model ? env->GetStringUTFChars(model, JNI_FALSE) : nullptr;
+    const char *c_device = device ? env->GetStringUTFChars(device, JNI_FALSE) : nullptr;
+    const char *c_product = product ? env->GetStringUTFChars(product, JNI_FALSE) : nullptr;
+    const char *c_fingerprint = fingerprint ? env->GetStringUTFChars(fingerprint, JNI_FALSE) : nullptr;
+    const char *c_serial = serial ? env->GetStringUTFChars(serial, JNI_FALSE) : nullptr;
+
+    setDeviceSpoofValues(c_manufacturer, c_brand, c_model, c_device, c_product, c_fingerprint, c_serial);
+
+    if (manufacturer) env->ReleaseStringUTFChars(manufacturer, c_manufacturer);
+    if (brand) env->ReleaseStringUTFChars(brand, c_brand);
+    if (model) env->ReleaseStringUTFChars(model, c_model);
+    if (device) env->ReleaseStringUTFChars(device, c_device);
+    if (product) env->ReleaseStringUTFChars(product, c_product);
+    if (fingerprint) env->ReleaseStringUTFChars(fingerprint, c_fingerprint);
+    if (serial) env->ReleaseStringUTFChars(serial, c_serial);
+}
+
 static JNINativeMethod gMethods[] = {
         {"disableHiddenApi", "()Z",                               (void *) disableHiddenApi},
         {"disableResourceLoading", "()Z",                         (void *) disableResourceLoading},
@@ -138,6 +166,7 @@ static JNINativeMethod gMethods[] = {
         {"addIORule",  "(Ljava/lang/String;Ljava/lang/String;)V", (void *) addIORule},
         {"enableIO",   "()V",                                     (void *) enableIO},
         {"init",       "(I)V",                                    (void *) init},
+        {"setDeviceSpoof", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V", (void *) setDeviceSpoof},
 };
 
 int registerNativeMethods(JNIEnv *env, const char *className,

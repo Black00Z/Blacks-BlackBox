@@ -8,6 +8,7 @@ import java.lang.reflect.Method;
 
 import top.niunaijun.blackbox.BlackBoxCore;
 import top.niunaijun.blackbox.app.BActivityThread;
+import top.niunaijun.blackbox.fake.device.DeviceSpoofManager;
 import top.niunaijun.blackbox.fake.hook.ClassInvocationStub;
 import top.niunaijun.blackbox.fake.hook.MethodHook;
 import top.niunaijun.blackbox.fake.hook.ProxyMethod;
@@ -40,6 +41,10 @@ public class ISettingsProviderProxy extends ClassInvocationStub {
         @Override
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
             try {
+                String spoofedAndroidId = getSpoofedAndroidId(args);
+                if (spoofedAndroidId != null) {
+                    return spoofedAndroidId;
+                }
                 
                 if (args != null && args.length > 0) {
                     String key = (String) args[0];
@@ -67,6 +72,10 @@ public class ISettingsProviderProxy extends ClassInvocationStub {
         @Override
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
             try {
+                String spoofedAndroidId = getSpoofedAndroidId(args);
+                if (spoofedAndroidId != null) {
+                    return spoofedAndroidId;
+                }
                 
                 if (args != null && args.length > 0) {
                     String key = (String) args[0];
@@ -189,5 +198,21 @@ public class ISettingsProviderProxy extends ClassInvocationStub {
                 throw e;
             }
         }
+    }
+
+    private static String getSpoofedAndroidId(Object[] args) {
+        if (args == null) {
+            return null;
+        }
+        for (Object arg : args) {
+            if (!(arg instanceof String)) {
+                continue;
+            }
+            String key = (String) arg;
+            if (Settings.Secure.ANDROID_ID.equals(key) || "android_id".equalsIgnoreCase(key)) {
+                return DeviceSpoofManager.getAndroidIdForCurrentUser();
+            }
+        }
+        return null;
     }
 }

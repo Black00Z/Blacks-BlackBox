@@ -28,6 +28,38 @@
             android:exported="false" />
         <activity android:name=".view.setting.SettingActivity" />
         <activity android:name=".view.gms.GmsManagerActivity" />
+        <activity android:name=".view.spoof.DeviceSpoofingActivity" />
+        <activity
+            android:name=".view.gallery.BlackBoxGalleryPreviewActivity"
+            android:exported="false" />
+        <activity
+            android:name=".view.gallery.BlackBoxGalleryActivity"
+            android:exported="false" />
+        <activity
+            android:name=".view.gallery.BlackBoxGalleryImportActivity"
+            android:exported="true"
+            android:label="@string/blackbox_gallery_share_label">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+        </activity>
         <activity
             android:name=".view.main.WelcomeActivity"
             android:exported="true"

@@ -504,6 +504,12 @@
                 android:resource="@xml/filepath" />
         </provider>
 
+        <provider
+            android:name="top.niunaijun.blackbox.media.BlackBoxMediaProvider"
+            android:authorities="${applicationId}.blackbox.MediaProvider"
+            android:exported="false"
+            android:grantUriPermissions="true" />
+
         <receiver
             android:name=".proxy.ProxyBroadcastReceiver"
             android:enabled="true"

@@ -8,6 +8,7 @@ import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.PopupMenu
 import androidx.core.os.bundleOf
 import androidx.fragment.app.Fragment
@@ -19,6 +20,7 @@ import cbfg.rvadapter.RVAdapter
 import com.afollestad.materialdialogs.MaterialDialog
 import top.niunaijun.blackbox.BlackBoxCore
 import com.onebitmonochrome.blacksbbox.R
+import com.onebitmonochrome.blacksbbox.app.AppFreezeManager
 import com.onebitmonochrome.blacksbbox.bean.AppInfo
 import com.onebitmonochrome.blacksbbox.databinding.FragmentAppsBinding
 import com.onebitmonochrome.blacksbbox.util.InjectionUtil
@@ -332,6 +334,9 @@ class AppsFragment : Fragment() {
                 try {
                     popupMenu = PopupMenu(requireContext(),view).also {
                         it.inflate(R.menu.app_menu)
+                        if (!AppFreezeManager.isGlobalAutoFreezeEnabled()) {
+                            it.menu.removeItem(R.id.app_freeze_options)
+                        }
                         it.setOnMenuItemClickListener { item ->
                             try {
                                 when (item.itemId) {
@@ -353,6 +358,10 @@ class AppsFragment : Fragment() {
 
                                     R.id.app_shortcut -> {
                                         ShortcutUtil.createShortcut(requireContext(), userID, data)
+                                    }
+
+                                    R.id.app_freeze_options -> {
+                                        showFreezeOptions(data)
                                     }
                                 }
                                 return@setOnMenuItemClickListener true
@@ -502,6 +511,48 @@ class AppsFragment : Fragment() {
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error showing clear dialog: ${e.message}")
+        }
+    }
+
+    private fun showFreezeOptions(info: AppInfo) {
+        try {
+            AlertDialog.Builder(requireContext())
+                    .setTitle(R.string.app_freeze_options)
+                    .setMessage(getString(R.string.app_freeze_options_hint, info.name))
+                    .setPositiveButton("Yes") { _, _ ->
+                        AppFreezeManager.setExcludedFromAutoFreeze(
+                                info.packageName,
+                                userID,
+                                true
+                        )
+                        requireContext().toast(
+                                getString(
+                                        R.string.app_excluded_from_auto_freeze_enabled
+                                )
+                        )
+                    }
+                    .setNegativeButton("No") { _, _ ->
+                        AppFreezeManager.setExcludedFromAutoFreeze(
+                                info.packageName,
+                                userID,
+                                false
+                        )
+                        requireContext().toast(
+                                getString(R.string.app_excluded_from_auto_freeze_disabled)
+                        )
+                    }
+                    .setNeutralButton(R.string.app_freeze_now) { _, _ ->
+                        try {
+                            BlackBoxCore.get().stopPackage(info.packageName, userID)
+                            requireContext().toast(getString(R.string.app_is_frozen, info.name))
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error freezing app: ${e.message}")
+                            toast(R.string.start_fail)
+                        }
+                    }
+                    .show()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error showing freeze options: ${e.message}")
         }
     }
 

@@ -32,6 +32,7 @@ import top.niunaijun.blackbox.fake.hook.MethodHook;
 import top.niunaijun.blackbox.fake.hook.ProxyMethod;
 import top.niunaijun.blackbox.fake.service.base.PkgMethodProxy;
 import top.niunaijun.blackbox.fake.service.base.ValueMethodProxy;
+import top.niunaijun.blackbox.media.BlackBoxMediaContract;
 import top.niunaijun.blackbox.utils.MethodParameterUtils;
 import top.niunaijun.blackbox.utils.Reflector;
 import top.niunaijun.blackbox.utils.Slog;
@@ -429,6 +430,15 @@ public class IPackageManagerProxy extends BinderInvocationStub {
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
             String authority = (String) args[0];
             int flags = MethodParameterUtils.toInt(args[1]);
+            if (BlackBoxMediaContract.PUBLIC_AUTHORITY.equals(authority)) {
+                ProviderInfo providerInfo = BlackBoxCore.getPackageManager()
+                        .resolveContentProvider(BlackBoxCore.getHostPkg() + ".blackbox.MediaProvider", flags);
+                if (providerInfo != null) {
+                    providerInfo = new ProviderInfo(providerInfo);
+                    providerInfo.authority = BlackBoxMediaContract.PUBLIC_AUTHORITY;
+                    return providerInfo;
+                }
+            }
             ProviderInfo providerInfo = BlackBoxCore.getBPackageManager().resolveContentProvider(authority, flags, BActivityThread.getUserId());
             if (providerInfo == null) {
                 return method.invoke(who, args);

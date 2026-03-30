@@ -22,10 +22,12 @@ import java.util.Objects;
 
 import black.android.app.BRActivityManagerNative;
 import black.android.app.BRActivityManagerOreo;
+import black.android.app.BRIActivityManagerContentProviderHolder;
 import black.android.app.BRLoadedApkReceiverDispatcher;
 import black.android.app.BRLoadedApkReceiverDispatcherInnerReceiver;
 import black.android.app.BRLoadedApkServiceDispatcher;
 import black.android.app.BRLoadedApkServiceDispatcherInnerConnection;
+import black.android.content.BRContentProviderHolderOreo;
 import black.android.content.BRContentProviderNative;
 import black.android.content.pm.BRUserInfo;
 import black.android.util.BRSingleton;
@@ -46,6 +48,8 @@ import top.niunaijun.blackbox.fake.hook.ProxyMethod;
 import top.niunaijun.blackbox.fake.hook.ScanClass;
 import top.niunaijun.blackbox.fake.service.base.PkgMethodProxy;
 import top.niunaijun.blackbox.fake.service.context.providers.ContentProviderStub;
+import top.niunaijun.blackbox.fake.service.context.providers.VirtualMediaProviderStub;
+import top.niunaijun.blackbox.media.BlackBoxMediaContract;
 import top.niunaijun.blackbox.proxy.ProxyManifest;
 import top.niunaijun.blackbox.proxy.record.ProxyBroadcastRecord;
 import top.niunaijun.blackbox.proxy.record.ProxyPendingRecord;
@@ -144,6 +148,33 @@ public class IActivityManagerProxy extends ClassInvocationStub {
 
                 if (BuildCompat.isQ()) {
                     args[1] = BlackBoxCore.getHostPkg();
+                }
+
+                if ("media".equals(auth)) {
+                    args[authIndex] = ProxyManifest.getMediaProviderAuthority();
+                    content = method.invoke(who, args);
+                    if (content != null) {
+                        ProviderInfo providerInfo = BlackBoxCore.getPackageManager()
+                                .resolveContentProvider(ProxyManifest.getMediaProviderAuthority(), GET_META_DATA);
+                        if (providerInfo != null) {
+                            providerInfo = new ProviderInfo(providerInfo);
+                            providerInfo.authority = BlackBoxMediaContract.PUBLIC_AUTHORITY;
+                            Reflector.with(content).field("info").set(providerInfo);
+                        }
+
+                        IInterface provider = BuildCompat.isOreo()
+                                ? BRContentProviderHolderOreo.get(content).provider()
+                                : BRIActivityManagerContentProviderHolder.get(content).provider();
+                        if (provider != null) {
+                            IInterface wrapped = new VirtualMediaProviderStub().wrapper(provider, BlackBoxCore.getHostPkg());
+                            if (BuildCompat.isOreo()) {
+                                BRContentProviderHolderOreo.get(content)._set_provider(wrapped);
+                            } else {
+                                BRIActivityManagerContentProviderHolder.get(content)._set_provider(wrapped);
+                            }
+                        }
+                    }
+                    return content;
                 }
 
                 if (auth.equals("settings")

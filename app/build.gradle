@@ -42,6 +42,11 @@ android {
     buildFeatures {
         viewBinding true
     }
+    sourceSets {
+        main {
+            assets.srcDir(layout.buildDirectory.dir("generated/blackboxGalleryAssets"))
+        }
+    }
     kotlinOptions {
         jvmTarget = '21'
     }
@@ -51,6 +56,21 @@ android {
             output.outputFileName = "BlackBox_${variant.versionName}_${output.baseName}.apk"
         }
     }
+}
+
+def blackBoxGalleryAssetsDir = layout.buildDirectory.dir("generated/blackboxGalleryAssets")
+
+tasks.register("copyBlackBoxGuestGalleryApk", Copy) {
+    dependsOn(":blackbox-gallery-stub:assembleDebug")
+    from("$rootDir/blackbox-gallery-stub/build/outputs/apk/debug") {
+        include("*.apk")
+        rename { "blackbox-gallery-stub.apk" }
+    }
+    into(blackBoxGalleryAssetsDir)
+}
+
+tasks.named("preBuild").configure {
+    dependsOn("copyBlackBoxGuestGalleryApk")
 }
 
 dependencies {

@@ -41,11 +41,9 @@ inspiration/
 # Markdown notes and local instructions
 *.md
 !README.md
-copilot-instructions.md
 
 # Local test artifacts / personal files
 BlacksBlackBox.png
-InstaFlow_v24_Principal.apk
 
 # Historical one-off excludes
 app/release/

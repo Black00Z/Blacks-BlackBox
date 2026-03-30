@@ -12,4 +12,14 @@
         android:id="@+id/fake_location"
         android:title="@string/fake_location"
         app:showAsAction="never" />
+
+    <item
+        android:id="@+id/device_spoofing"
+        android:title="@string/device_spoofing"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/blackbox_gallery"
+        android:title="@string/blackbox_gallery_menu"
+        app:showAsAction="never" />
 </menu>
