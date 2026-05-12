@@ -9,6 +9,8 @@ import android.content.pm.ResolveInfo;
 import android.content.pm.ServiceInfo;
 import android.util.ArrayMap;
 
+import android.text.TextUtils;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -85,6 +87,17 @@ public class ComponentResolver {
             mProvidersByAuthority.remove(p.info.authority);
         }
 
+        final String removingPackage = pkg.applicationInfo != null ? pkg.applicationInfo.packageName : null;
+        if (!TextUtils.isEmpty(removingPackage)) {
+            for (int index = mProvidersByAuthority.size() - 1; index >= 0; index--) {
+                final BPackage.Provider mappedProvider = mProvidersByAuthority.valueAt(index);
+                final ComponentName mappedComponent = (mappedProvider != null) ? mappedProvider.getComponentName() : null;
+                if (mappedComponent != null && removingPackage.equals(mappedComponent.getPackageName())) {
+                    mProvidersByAuthority.removeAt(index);
+                }
+            }
+        }
+
         componentSize = pkg.receivers.size();
         r = null;
         for (i = 0; i < componentSize; i++) {
@@ -118,30 +131,33 @@ public class ComponentResolver {
             p.info.processName = BPackageManagerService.fixProcessName(pkg.applicationInfo.processName,
                     p.info.processName);
             mProviders.addProvider(p);
-            if (p.info.authority != null) {
-                String[] names = p.info.authority.split(";");
-                p.info.authority = null;
+            final String originalAuthority = p.info.authority;
+            if (originalAuthority != null) {
+                final String[] names = originalAuthority.split(";");
+                String rebuiltAuthority = null;
                 for (String name : names) {
+                    if (TextUtils.isEmpty(name)) {
+                        continue;
+                    }
                     if (!mProvidersByAuthority.containsKey(name)) {
                         mProvidersByAuthority.put(name, p);
-                        if (p.info.authority == null) {
-                            p.info.authority = name;
+                        if (rebuiltAuthority == null) {
+                            rebuiltAuthority = name;
                         } else {
-                            p.info.authority = p.info.authority + ";" + name;
+                            rebuiltAuthority = rebuiltAuthority + ";" + name;
                         }
                     } else {
-                        final BPackage.Provider other =
-                                mProvidersByAuthority.get(name);
-                        final ComponentName component =
-                                (other != null && other.getComponentName() != null)
-                                        ? other.getComponentName() : null;
-                        final String packageName =
-                                component != null ? component.getPackageName() : "?";
+                        final BPackage.Provider other = mProvidersByAuthority.get(name);
+                        final ComponentName component = (other != null && other.getComponentName() != null)
+                                ? other.getComponentName() : null;
+                        final String packageName = component != null ? component.getPackageName() : "?";
                         Slog.w(TAG, "Skipping provider name " + name
                                 + " (in package " + pkg.applicationInfo.packageName + ")"
                                 + ": name already used by " + packageName);
                     }
                 }
+
+                p.info.authority = (rebuiltAuthority != null) ? rebuiltAuthority : originalAuthority;
             }
         }
     }
@@ -478,6 +494,9 @@ public class ComponentResolver {
             }
             ActivityInfo ai =
                     PackageManagerCompat.generateActivityInfo(activity, mFlags, ps.readUserState(userId), userId);
+            if (ai == null) {
+                return null;
+            }
 
             final ResolveInfo res = new ResolveInfo();
             res.activityInfo = ai;

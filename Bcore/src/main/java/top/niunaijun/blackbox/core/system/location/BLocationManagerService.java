@@ -14,10 +14,10 @@ import java.io.InputStream;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
-import black.android.location.BRILocationListener;
 import black.android.location.BRILocationListenerStub;
 import top.niunaijun.blackbox.BlackBoxCore;
 import top.niunaijun.blackbox.core.env.BEnvironment;
@@ -26,6 +26,7 @@ import top.niunaijun.blackbox.entity.location.BCell;
 import top.niunaijun.blackbox.entity.location.BLocation;
 import top.niunaijun.blackbox.entity.location.BLocationConfig;
 import top.niunaijun.blackbox.fake.frameworks.BLocationManager;
+import top.niunaijun.blackbox.utils.compat.LocationListenerCompat;
 import top.niunaijun.blackbox.utils.CloseUtils;
 import top.niunaijun.blackbox.utils.BzFileUtils;
 import top.niunaijun.blackbox.utils.Slog;
@@ -37,7 +38,7 @@ public class BLocationManagerService extends IBLocationManagerService.Stub imple
     private static final BLocationManagerService sService = new BLocationManagerService();
     private final SparseArray<HashMap<String, BLocationConfig>> mLocationConfigs = new SparseArray<>();
     private final BLocationConfig mGlobalConfig = new BLocationConfig();
-    private final Map<IBinder, LocationRecord> mLocationListeners = new HashMap<>();
+    private final Map<IBinder, LocationRecord> mLocationListeners = new ConcurrentHashMap<>();
     private final Executor mThreadPool = Executors.newCachedThreadPool();
 
     public static BLocationManagerService get() {
@@ -171,6 +172,7 @@ public class BLocationManagerService extends IBLocationManagerService.Stub imple
         synchronized (mLocationConfigs) {
             getOrCreateConfig(userId, pkg).location = location;
             save();
+            Slog.i(TAG, "setLocation userId=" + userId + " pkg=" + pkg + " loc=" + (location != null ? location.toString() : "null"));
         }
     }
 
@@ -193,6 +195,7 @@ public class BLocationManagerService extends IBLocationManagerService.Stub imple
         synchronized (mGlobalConfig) {
             mGlobalConfig.location = location;
             save();
+            Slog.i(TAG, "setGlobalLocation loc=" + (location != null ? location.toString() : "null"));
         }
     }
 
@@ -237,11 +240,21 @@ public class BLocationManagerService extends IBLocationManagerService.Stub imple
             while (locationListener.pingBinder()) {
                 IInterface iInterface = BRILocationListenerStub.get().asInterface(locationListener);
                 LocationRecord locationRecord = mLocationListeners.get(locationListener);
-                if (locationRecord == null)
+                if (locationRecord == null) {
+                    try {
+                        Thread.sleep(250);
+                    } catch (InterruptedException ignored) {
+                    }
                     continue;
+                }
                 BLocation location = getLocation(locationRecord.userId, locationRecord.packageName);
-                if (location == null)
+                if (location == null) {
+                    try {
+                        Thread.sleep(250);
+                    } catch (InterruptedException ignored) {
+                    }
                     continue;
+                }
                 if (location.equals(lastLocation) && (System.currentTimeMillis() - l) < 3000) {
                     try {
                         Thread.sleep(1000);
@@ -251,7 +264,8 @@ public class BLocationManagerService extends IBLocationManagerService.Stub imple
                 }
                 lastLocation = location;
                 l = System.currentTimeMillis();
-                BlackBoxCore.get().getHandler().post(() -> BRILocationListener.get(iInterface).onLocationChanged(location.convert2SystemLocation()));
+                final Object listener = iInterface;
+                BlackBoxCore.get().getHandler().post(() -> LocationListenerCompat.dispatchLocationChanged(listener, location.convert2SystemLocation()));
             }
         });
     }

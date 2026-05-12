@@ -91,11 +91,28 @@ public class ContextCompat {
 
             // Android 14+/16 work profiles are sensitive to userId mismatches.
             // Ensure ContextImpl user fields reflect the real Android host user.
-            int hostUserId = BlackBoxCore.getHostUserId();
-            if (hostUserId == 0) {
-                hostUserId = Process.myUid() / 100000;
+            //
+            // IMPORTANT: do not derive the "host user" from Process.myUid() here, because in guest
+            // processes Process/Os hooks may already virtualize it to the BlackBox user (e.g. 2),
+            // which then crashes modern WindowManager with "requested userId is not valid".
+            int hostUserId = 0;
+            try {
+                Context hostContext = BlackBoxCore.getContext();
+                if (hostContext != null && hostContext.getApplicationInfo() != null && hostContext.getApplicationInfo().uid > 0) {
+                    hostUserId = hostContext.getApplicationInfo().uid / 100000;
+                }
+            } catch (Throwable ignored) {
             }
-            if (hostUserId != 0) {
+            if (hostUserId <= 0) {
+                hostUserId = BlackBoxCore.getHostUserId();
+            }
+            if (hostUserId <= 0) {
+                int hostUid = BlackBoxCore.getHostUid();
+                if (hostUid > 0) {
+                    hostUserId = hostUid / 100000;
+                }
+            }
+            if (hostUserId > 0) {
                 forceContextUser(context, hostUserId);
             }
             

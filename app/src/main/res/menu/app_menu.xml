@@ -7,6 +7,8 @@
 
     <item android:id="@+id/app_freeze_options" android:title="@string/app_freeze_options"/>
 
+    <item android:id="@+id/app_shealth_login_fallback" android:title="@string/shealth_login_fallback_enable"/>
+
     <item android:id="@+id/app_remove" android:title="@string/app_remove"/>
     <item android:id="@+id/app_shortcut" android:title="@string/app_shortcut"/>
 </menu>

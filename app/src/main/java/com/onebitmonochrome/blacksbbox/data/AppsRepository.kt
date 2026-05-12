@@ -1,9 +1,9 @@
 package com.onebitmonochrome.blacksbbox.data
 
 import android.content.pm.ApplicationInfo
+import android.content.ContentResolver
 import android.net.Uri
 import android.util.Log
-import android.webkit.URLUtil
 import androidx.lifecycle.MutableLiveData
 import java.io.File
 import top.niunaijun.blackbox.BlackBoxCore
@@ -359,24 +359,44 @@ class AppsRepository {
 
     fun installApk(source: String, userId: Int, resultLiveData: MutableLiveData<String>) {
         try {
+            val normalizedSource = normalizeApkSource(source)
+            val parsedUri = runCatching { Uri.parse(normalizedSource) }.getOrNull()
+            val scheme = parsedUri?.scheme
+            val looksLikeApkPath =
+                    normalizedSource.endsWith(".apk", ignoreCase = true) ||
+                            normalizedSource.contains(".apk?", ignoreCase = true) ||
+                            normalizedSource.endsWith(".apks", ignoreCase = true) ||
+                            normalizedSource.contains(".apks?", ignoreCase = true)
+            val localFile = if (scheme.isNullOrEmpty()) File(normalizedSource) else null
+            val isLocalFilePath = localFile?.exists() == true || looksLikeApkPath
+            val isContentOrFileUri = scheme == ContentResolver.SCHEME_CONTENT || scheme == ContentResolver.SCHEME_FILE
+
+            Log.i(
+                TAG,
+                "installApk: userId=$userId scheme=${scheme ?: "<none>"} " +
+                    "isContentOrFileUri=$isContentOrFileUri isLocalFilePath=$isLocalFilePath " +
+                    "source=$normalizedSource"
+            )
+
             
-            if (source.contains("blackbox") ||
-                            source.contains("niunaijun") ||
-                            source.contains("vspace") ||
-                            source.contains("virtual")
+            if (normalizedSource.contains("blackbox") ||
+                            normalizedSource.contains("niunaijun") ||
+                            normalizedSource.contains("vspace") ||
+                            normalizedSource.contains("virtual")
             ) {
                 
                 try {
                     val blackBoxCore = BlackBoxCore.get()
                     val hostPackageName = BlackBoxCore.getHostPkg()
 
-                    
-                    if (!URLUtil.isValidUrl(source)) {
-                        val file = File(source)
+                    // For local file paths we can pre-check the archive; for content/file Uris the core
+                    // install path will still reject the host package after parsing.
+                    if (isLocalFilePath) {
+                        val file = localFile ?: File(normalizedSource)
                         if (file.exists()) {
                             val packageInfo =
                                     BlackBoxCore.getPackageManager()
-                                            .getPackageArchiveInfo(source, 0)
+                                            .getPackageArchiveInfo(file.absolutePath, 0)
                             if (packageInfo != null && packageInfo.packageName == hostPackageName) {
                                 resultLiveData.postValue(
                                         "Cannot install BlackBox app from within BlackBox. This would create infinite recursion and is not allowed for security reasons."
@@ -391,13 +411,22 @@ class AppsRepository {
             }
 
             val blackBoxCore = BlackBoxCore.get()
-            val installResult =
-                    if (URLUtil.isValidUrl(source)) {
-                        val uri = Uri.parse(source)
-                        blackBoxCore.installPackageAsUser(uri, userId)
-                    } else {
-                        blackBoxCore.installPackageAsUser(source, userId)
-                    }
+
+            val installResult = when {
+                isContentOrFileUri && parsedUri != null -> {
+                    blackBoxCore.installPackageAsUser(parsedUri, userId)
+                }
+
+                isLocalFilePath -> {
+                    val file = localFile ?: File(normalizedSource)
+                    blackBoxCore.installPackageAsUser(file, userId)
+                }
+
+                else -> {
+                    // Treat as package-name cloning (installed-on-host -> install-by-system).
+                    blackBoxCore.installPackageAsUser(normalizedSource, userId)
+                }
+            }
 
             if (installResult.success) {
                 updateAppSortList(userId, installResult.packageName, true)
@@ -410,6 +439,28 @@ class AppsRepository {
             Log.e(TAG, "Error installing APK: ${e.message}")
             resultLiveData.postValue("Installation failed: ${e.message}")
         }
+    }
+
+    private fun normalizeApkSource(source: String): String {
+        val s = source.trim()
+        if (s.isEmpty()) return s
+
+        // Some pickers/providers return malformed forms like:
+        // - "content:/authority/..." (missing second slash)
+        // - "/content:/authority/..." (File.absolutePath of the malformed form)
+        if (s.startsWith("/content:/")) {
+            return "content://" + s.removePrefix("/content:/")
+        }
+        if (s.startsWith("content:/") && !s.startsWith("content://")) {
+            return "content://" + s.removePrefix("content:/")
+        }
+        if (s.startsWith("/file:/")) {
+            return "file://" + s.removePrefix("/file:/")
+        }
+        if (s.startsWith("file:/") && !s.startsWith("file://")) {
+            return "file://" + s.removePrefix("file:/")
+        }
+        return s
     }
 
     fun unInstall(packageName: String, userID: Int, resultLiveData: MutableLiveData<String>) {

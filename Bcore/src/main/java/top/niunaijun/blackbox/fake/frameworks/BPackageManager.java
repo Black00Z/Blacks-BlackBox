@@ -9,6 +9,7 @@ import android.content.pm.ProviderInfo;
 import android.content.pm.ResolveInfo;
 import android.content.pm.ServiceInfo;
 import android.content.pm.Signature;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.RemoteException;
 import android.util.Log;
@@ -511,13 +512,22 @@ public class BPackageManager extends BlackManager<IBPackageManagerService> {
             if (file != null && !file.isEmpty()) {
                 try {
                     
-                    PackageInfo packageInfo = BlackBoxCore.getPackageManager().getPackageArchiveInfo(file, 0);
-                    if (packageInfo != null) {
-                        String packageName = packageInfo.packageName;
-                        String hostPackageName = BlackBoxCore.getHostPkg();
-                        if (packageName.equals(hostPackageName)) {
-                            Log.w(TAG, "Attempt to install BlackBox app detected and blocked: " + packageName);
-                            return new InstallResult().installError("Cannot clone BlackBox app from within BlackBox. This would create infinite recursion and is not allowed for security reasons.");
+                    Uri uri = Uri.parse(file);
+                    String scheme = uri.getScheme();
+                    boolean looksLikeUri = scheme != null && !scheme.isEmpty();
+
+                    // Only run archive precheck for real filesystem paths.
+                    // On Android, passing a content:// URI to getPackageArchiveInfo() produces a broken
+                    // "/content:/..." path and noisy zip/apk parse failures.
+                    if (!looksLikeUri && !file.startsWith("/content:/") && !file.startsWith("content:/")) {
+                        PackageInfo packageInfo = BlackBoxCore.getPackageManager().getPackageArchiveInfo(file, 0);
+                        if (packageInfo != null) {
+                            String packageName = packageInfo.packageName;
+                            String hostPackageName = BlackBoxCore.getHostPkg();
+                            if (packageName.equals(hostPackageName)) {
+                                Log.w(TAG, "Attempt to install BlackBox app detected and blocked: " + packageName);
+                                return new InstallResult().installError("Cannot clone BlackBox app from within BlackBox. This would create infinite recursion and is not allowed for security reasons.");
+                            }
                         }
                     }
                 } catch (Exception e) {
@@ -525,11 +535,16 @@ public class BPackageManager extends BlackManager<IBPackageManagerService> {
                 }
             }
             
-            return getService().installPackageAsUser(file, option, userId);
+            IBPackageManagerService service = getServiceWithFallback();
+            if (service == null) {
+                Log.w(TAG, "PackageManager service is null in installPackageAsUser, returning install error");
+                return new InstallResult().installError("PackageManager service unavailable");
+            }
+            return service.installPackageAsUser(file, option, userId);
         } catch (RemoteException e) {
             crash(e);
         }
-        return null;
+        return new InstallResult().installError("Remote exception during install");
     }
 
     public List<ApplicationInfo> getInstalledApplications(int flags, int userId) {
@@ -842,4 +857,3 @@ public class BPackageManager extends BlackManager<IBPackageManagerService> {
         return info;
     }
 }
-

@@ -1,10 +1,13 @@
 package com.onebitmonochrome.blacksbbox.view.gallery
 
 import android.content.Context
+import android.content.ClipData
 import android.content.Intent
+import android.content.pm.ResolveInfo
 import android.net.Uri
 import android.os.Bundle
 import android.widget.MediaController
+import androidx.appcompat.app.AlertDialog
 import androidx.lifecycle.lifecycleScope
 import com.onebitmonochrome.blacksbbox.R
 import com.onebitmonochrome.blacksbbox.databinding.ActivityBlackboxGalleryPreviewBinding
@@ -15,6 +18,7 @@ import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import top.niunaijun.blackbox.BlackBoxCore
 import top.niunaijun.blackbox.media.BlackBoxMediaEntry
 import top.niunaijun.blackbox.media.BlackBoxMediaStore
 
@@ -38,6 +42,9 @@ class BlackBoxGalleryPreviewActivity : LoadingActivity() {
             if (!BlackBoxGuestGalleryInstaller.launch(this, userId)) {
                 toast(R.string.blackbox_gallery_open_guest_failed)
             }
+        }
+        viewBinding.shareButton.setOnClickListener {
+            shareInsideBlackBox()
         }
         viewBinding.deleteButton.setOnClickListener {
             val entry = currentEntry ?: return@setOnClickListener
@@ -90,6 +97,74 @@ class BlackBoxGalleryPreviewActivity : LoadingActivity() {
             viewBinding.imageView.visibility = android.view.View.VISIBLE
             viewBinding.imageView.setImageURI(Uri.fromFile(File(entry.filePath)))
         }
+    }
+
+    private fun shareInsideBlackBox() {
+        val entry = currentEntry ?: return
+        val mimeType = entry.mimeType ?: if (entry.isVideo) "video/*" else "image/*"
+        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+            type = mimeType
+            putExtra(Intent.EXTRA_STREAM, entry.publicUri)
+            clipData = ClipData.newUri(contentResolver, entry.displayName ?: "media", entry.publicUri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+
+        val targets = findShareTargets(shareIntent, mimeType)
+
+        if (targets.isEmpty()) {
+            toast(R.string.blackbox_gallery_share_no_targets)
+            return
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle(R.string.blackbox_gallery_share_to_app)
+            .setItems(targets.map { resolveLabel(it) }.toTypedArray()) { _, which ->
+                startShareTarget(shareIntent, targets[which])
+            }
+            .show()
+    }
+
+    private fun findShareTargets(baseIntent: Intent, mimeType: String): List<ResolveInfo> {
+        val candidateTypes = linkedSetOf(
+            mimeType,
+            if (mimeType.startsWith("video/")) "video/*" else "image/*",
+            "*/*"
+        )
+        val byComponent = linkedMapOf<String, ResolveInfo>()
+        candidateTypes.forEach { type ->
+            val intent = Intent(baseIntent).apply { this.type = type }
+            BlackBoxCore.getBPackageManager()
+                .queryIntentActivities(intent, 0, type, userId)
+                .orEmpty()
+                .filter { it.activityInfo != null }
+                .forEach { resolveInfo ->
+                    val info = resolveInfo.activityInfo
+                    byComponent["${info.packageName}/${info.name}"] = resolveInfo
+                }
+        }
+        return byComponent.values.sortedBy { resolveLabel(it).lowercase() }
+    }
+
+    private fun startShareTarget(baseIntent: Intent, target: ResolveInfo) {
+        val info = target.activityInfo ?: return
+        val intent = Intent(baseIntent).apply {
+            setClassName(info.packageName, info.name)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        try {
+            BlackBoxCore.get().startActivity(intent, userId)
+        } catch (e: Exception) {
+            toast(R.string.blackbox_gallery_share_failed)
+        }
+    }
+
+    private fun resolveLabel(resolveInfo: ResolveInfo): String {
+        return try {
+            resolveInfo.loadLabel(BlackBoxCore.getPackageManager())?.toString()
+        } catch (e: Exception) {
+            null
+        } ?: resolveInfo.activityInfo?.packageName ?: getString(R.string.blackbox_gallery_share_to_app)
     }
 
     companion object {

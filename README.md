@@ -29,6 +29,15 @@ I made this fork to make the apps I actually care about usable in a virtualized 
 - Privacy-first behavior tightened in PackageManager surfaces, with an explicit opt-in compatibility fallback toggle (`host_signing_fallback`)
 
 ## Changelog
+### 10.05.26 - 4.71 Update: .apks support and gallery reworked and updated slightly
+
+#### Gallery . ݁₊ ⊹ . ݁˖ . ݁
+Gallery preview now exposes a ```Share to app``` sheet inside Black's B-Box. Images and videos are shared as URIs, and the selected app is started with temporary read permission when it supports the content type.
+
+#### APKS / Split APK install
+Added support for installing `.apks` bundles inside Black's B-Box.
+
+If you have a split APK bundle, rename it to `.apks` and install it from inside Black's B-Box through the normal import flow.
 ### 30.03.26 - 4.6 Update: Freezing, Device Spoofing, and Media Sharing
 
 #### Gallery . ݁₊ ⊹ . ݁˖ . ݁

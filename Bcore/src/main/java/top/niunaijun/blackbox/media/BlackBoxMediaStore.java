@@ -130,15 +130,154 @@ public final class BlackBoxMediaStore {
             String orderBy = TextUtils.isEmpty(sortOrder)
                     ? BlackBoxMediaContract.COL_DATE_MODIFIED + " DESC, " + BlackBoxMediaContract.COL_ID + " DESC"
                     : sortOrder;
-            return database.query(
-                    BlackBoxMediaContract.TABLE_MEDIA,
-                    projection,
-                    finalSelection,
-                    finalSelectionArgs,
-                    null,
-                    null,
-                    orderBy
-            );
+            try {
+                return database.query(
+                        BlackBoxMediaContract.TABLE_MEDIA,
+                        normalizeProjection(projection),
+                        finalSelection,
+                        finalSelectionArgs,
+                        null,
+                        null,
+                        orderBy
+                );
+            } catch (Throwable firstError) {
+                Slog.w(TAG, "Media query fallback for projection/selection: " + firstError.getMessage());
+                try {
+                    List<BlackBoxMediaEntry> entries = queryEntriesLocked(database, finalSelection, finalSelectionArgs, null);
+                    return buildCompatCursor(projection, entries);
+                } catch (Throwable secondError) {
+                    Slog.w(TAG, "Media query broad fallback: " + secondError.getMessage());
+                    String broadSelection = buildSelection(uri, userId, mediaType, null);
+                    List<BlackBoxMediaEntry> entries = queryEntriesLocked(database, broadSelection, null, null);
+                    return buildCompatCursor(projection, entries);
+                }
+            }
+        }
+    }
+
+    private static String[] normalizeProjection(String[] projection) {
+        if (projection == null || projection.length == 0) {
+            return null;
+        }
+        ArrayList<String> supported = new ArrayList<>();
+        for (String column : projection) {
+            if (isStoredColumn(column)) {
+                supported.add(column);
+            }
+        }
+        if (supported.size() == projection.length) {
+            return projection;
+        }
+        return null;
+    }
+
+    private static boolean isStoredColumn(String column) {
+        if (TextUtils.isEmpty(column)) {
+            return false;
+        }
+        return BlackBoxMediaContract.COL_ID.equals(column)
+                || BlackBoxMediaContract.COL_USER_ID.equals(column)
+                || BlackBoxMediaContract.COL_MEDIA_TYPE.equals(column)
+                || BlackBoxMediaContract.COL_DISPLAY_NAME.equals(column)
+                || BlackBoxMediaContract.COL_TITLE.equals(column)
+                || BlackBoxMediaContract.COL_MIME_TYPE.equals(column)
+                || BlackBoxMediaContract.COL_SIZE.equals(column)
+                || BlackBoxMediaContract.COL_DATE_ADDED.equals(column)
+                || BlackBoxMediaContract.COL_DATE_MODIFIED.equals(column)
+                || BlackBoxMediaContract.COL_DATE_TAKEN.equals(column)
+                || BlackBoxMediaContract.COL_RELATIVE_PATH.equals(column)
+                || BlackBoxMediaContract.COL_BUCKET_DISPLAY_NAME.equals(column)
+                || BlackBoxMediaContract.COL_BUCKET_ID.equals(column)
+                || BlackBoxMediaContract.COL_WIDTH.equals(column)
+                || BlackBoxMediaContract.COL_HEIGHT.equals(column)
+                || BlackBoxMediaContract.COL_DURATION.equals(column)
+                || BlackBoxMediaContract.COL_IS_PENDING.equals(column)
+                || BlackBoxMediaContract.COL_DATA.equals(column)
+                || BlackBoxMediaContract.COL_CANONICAL_PATH.equals(column)
+                || BlackBoxMediaContract.COL_ROOT_PATH.equals(column);
+    }
+
+    private static Cursor buildCompatCursor(String[] projection, List<BlackBoxMediaEntry> entries) {
+        String[] columns = projection != null && projection.length > 0 ? projection : defaultProjection();
+        MatrixCursor cursor = new MatrixCursor(columns);
+        if (entries == null) {
+            return cursor;
+        }
+        for (BlackBoxMediaEntry entry : entries) {
+            Object[] row = new Object[columns.length];
+            for (int i = 0; i < columns.length; i++) {
+                row[i] = valueForColumn(entry, columns[i]);
+            }
+            cursor.addRow(row);
+        }
+        return cursor;
+    }
+
+    private static String[] defaultProjection() {
+        return new String[]{
+                BlackBoxMediaContract.COL_ID,
+                BlackBoxMediaContract.COL_MEDIA_TYPE,
+                BlackBoxMediaContract.COL_DISPLAY_NAME,
+                BlackBoxMediaContract.COL_MIME_TYPE,
+                BlackBoxMediaContract.COL_SIZE,
+                BlackBoxMediaContract.COL_DATE_MODIFIED,
+                BlackBoxMediaContract.COL_DATA
+        };
+    }
+
+    private static Object valueForColumn(BlackBoxMediaEntry entry, String column) {
+        if (entry == null || column == null) return null;
+        switch (column) {
+            case BlackBoxMediaContract.COL_ID:
+                return entry.getId();
+            case BlackBoxMediaContract.COL_USER_ID:
+                return entry.getUserId();
+            case BlackBoxMediaContract.COL_MEDIA_TYPE:
+                return entry.getMediaType();
+            case BlackBoxMediaContract.COL_DISPLAY_NAME:
+                return entry.getDisplayName();
+            case BlackBoxMediaContract.COL_TITLE:
+                return entry.getTitle();
+            case BlackBoxMediaContract.COL_MIME_TYPE:
+                return entry.getMimeType();
+            case BlackBoxMediaContract.COL_SIZE:
+                return entry.getSize();
+            case BlackBoxMediaContract.COL_DATE_ADDED:
+                return entry.getDateAdded();
+            case BlackBoxMediaContract.COL_DATE_MODIFIED:
+                return entry.getDateModified();
+            case BlackBoxMediaContract.COL_DATE_TAKEN:
+                return entry.getDateTaken();
+            case BlackBoxMediaContract.COL_RELATIVE_PATH:
+                return entry.getRelativePath();
+            case BlackBoxMediaContract.COL_BUCKET_DISPLAY_NAME:
+                return entry.getBucketDisplayName();
+            case BlackBoxMediaContract.COL_BUCKET_ID:
+                return entry.getBucketId();
+            case BlackBoxMediaContract.COL_WIDTH:
+                return entry.getWidth();
+            case BlackBoxMediaContract.COL_HEIGHT:
+                return entry.getHeight();
+            case BlackBoxMediaContract.COL_DURATION:
+                return entry.getDuration();
+            case BlackBoxMediaContract.COL_IS_PENDING:
+                return entry.getIsPending();
+            case BlackBoxMediaContract.COL_DATA:
+                return entry.getFilePath();
+            case BlackBoxMediaContract.COL_CANONICAL_PATH:
+                return entry.getCanonicalPath();
+            case BlackBoxMediaContract.COL_ROOT_PATH:
+                return entry.getRootPath();
+            case "orientation":
+            case "is_favorite":
+            case "is_trashed":
+                return 0;
+            case "volume_name":
+                return BlackBoxMediaContract.EXTERNAL_VOLUME;
+            case "owner_package_name":
+                return "";
+            default:
+                return null;
         }
     }
 

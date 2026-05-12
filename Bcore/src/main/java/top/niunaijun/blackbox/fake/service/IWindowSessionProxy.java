@@ -1,6 +1,7 @@
 package top.niunaijun.blackbox.fake.service;
 
 import android.os.IInterface;
+import android.content.Context;
 import android.os.Process;
 import android.view.WindowManager;
 
@@ -56,23 +57,56 @@ public class IWindowSessionProxy extends BinderInvocationStub {
             return;
         }
 
-        int hostUserId = BlackBoxCore.getHostUserId();
-        if (hostUserId == 0) {
-            hostUserId = Process.myUid() / 100000;
+        int hostUserId = resolveHostUserId();
+        // hostUserId may legitimately be 0 on the primary/owner profile.
+        if (hostUserId < 0) {
+            return;
         }
-        if (hostUserId == 0) {
+
+        // Heuristic: on modern Android, addToDisplayAsUser(...) places userId right after
+        // the initial (IWindow, LayoutParams, viewVisibility, displayId) arguments.
+        // That is typically index 4. Keep the older "last int" fallback for older signatures.
+        if (args.length > 4 && args[4] instanceof Integer) {
+            int requestedUserId = (Integer) args[4];
+            if (requestedUserId != hostUserId) {
+                args[4] = hostUserId;
+            }
             return;
         }
 
         for (int i = args.length - 1; i >= 0; i--) {
             if (args[i] instanceof Integer) {
                 int requestedUserId = (Integer) args[i];
-                if (requestedUserId == 0) {
+                if (requestedUserId != hostUserId) {
                     args[i] = hostUserId;
                 }
                 break;
             }
         }
+    }
+
+    private static int resolveHostUserId() {
+        // Prefer deriving from a real ApplicationInfo UID (not virtualized Process.myUid()).
+        try {
+            Context ctx = BlackBoxCore.getContext();
+            if (ctx != null && ctx.getApplicationInfo() != null && ctx.getApplicationInfo().uid > 0) {
+                return ctx.getApplicationInfo().uid / 100000;
+            }
+        } catch (Throwable ignored) {
+        }
+
+        int hostUserId = BlackBoxCore.getHostUserId();
+        if (hostUserId > 0) {
+            return hostUserId;
+        }
+
+        int hostUid = BlackBoxCore.getHostUid();
+        if (hostUid > 0) {
+            return hostUid / 100000;
+        }
+
+        // Last resort: may be virtualized in guest processes, but better than 0.
+        return Process.myUid() / 100000;
     }
 
     @ProxyMethod("addToDisplay")

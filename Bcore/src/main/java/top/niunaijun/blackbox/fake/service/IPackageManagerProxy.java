@@ -15,6 +15,7 @@ import android.util.Log;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
+import java.lang.reflect.Constructor;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -26,6 +27,7 @@ import black.android.content.pm.BRPackageManager;
 import top.niunaijun.blackbox.BlackBoxCore;
 import top.niunaijun.blackbox.app.BActivityThread;
 import top.niunaijun.blackbox.core.env.AppSystemEnv;
+import top.niunaijun.blackbox.core.env.SamsungHealthCompat;
 import top.niunaijun.blackbox.fake.FakeCore;
 import top.niunaijun.blackbox.fake.hook.BinderInvocationStub;
 import top.niunaijun.blackbox.fake.hook.MethodHook;
@@ -42,6 +44,74 @@ import top.niunaijun.blackbox.utils.compat.ParceledListSliceCompat;
 
 public class IPackageManagerProxy extends BinderInvocationStub {
     public static final String TAG = "PackageManagerStub";
+
+    private static final String PKG_SAMSUNG_HEALTH = "com.sec.android.app.shealth";
+    private static final String PKG_SAMSUNG_ACCOUNT = "com.osp.app.signin";
+
+    private static boolean shouldHideHostSamsungAccountForSamsungHealth(String queriedPackageName) {
+        if (!PKG_SAMSUNG_ACCOUNT.equals(queriedPackageName)) {
+            return false;
+        }
+        try {
+            String callerPackage = BActivityThread.getAppPackageName();
+            if (!PKG_SAMSUNG_HEALTH.equals(callerPackage)) {
+                return false;
+            }
+            int userId = BActivityThread.getUserId();
+            return !SamsungHealthCompat.isHostSamsungAccountFallbackEnabled(userId, callerPackage);
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
+
+    private static boolean shouldHideHostSamsungAccountForSamsungHealth(Intent intent) {
+        if (intent == null) {
+            return false;
+        }
+        try {
+            String targetPackage = intent.getPackage();
+            if (targetPackage == null) {
+                ComponentName cn = intent.getComponent();
+                if (cn != null) {
+                    targetPackage = cn.getPackageName();
+                }
+            }
+            return shouldHideHostSamsungAccountForSamsungHealth(targetPackage);
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
+
+    private static boolean shouldHideHostSamsungAccountForSamsungHealthCaller() {
+        try {
+            String callerPackage = BActivityThread.getAppPackageName();
+            if (!PKG_SAMSUNG_HEALTH.equals(callerPackage)) {
+                return false;
+            }
+            int userId = BActivityThread.getUserId();
+            return !SamsungHealthCompat.isHostSamsungAccountFallbackEnabled(userId, callerPackage);
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
+
+    private static List<ResolveInfo> filterOutSamsungAccountActivities(List<ResolveInfo> resolves) {
+        if (resolves == null || resolves.isEmpty()) {
+            return resolves;
+        }
+        ArrayList<ResolveInfo> filtered = new ArrayList<>(resolves.size());
+        for (ResolveInfo ri : resolves) {
+            if (ri == null) {
+                continue;
+            }
+            ActivityInfo ai = ri.activityInfo;
+            if (ai != null && PKG_SAMSUNG_ACCOUNT.equals(ai.packageName)) {
+                continue;
+            }
+            filtered.add(ri);
+        }
+        return filtered;
+    }
 
     public IPackageManagerProxy() {
         super(BRActivityThread.get().sPackageManager().asBinder());
@@ -95,6 +165,13 @@ public class IPackageManagerProxy extends BinderInvocationStub {
         @Override
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
             Intent intent = (Intent) args[0];
+
+            // Privacy-first Samsung Health behavior: when host Samsung Account fallback is OFF,
+            // ensure SaSDK cannot resolve intents into the host Samsung Account app.
+            if (shouldHideHostSamsungAccountForSamsungHealth(intent)) {
+                return null;
+            }
+
             String resolvedType = (String) args[1];
             int flags = MethodParameterUtils.toInt(args[2]);
             ResolveInfo resolveInfo = BlackBoxCore.getBPackageManager().resolveIntent(intent, resolvedType, flags, BlackBoxCore.getUserId());
@@ -119,6 +196,69 @@ public class IPackageManagerProxy extends BinderInvocationStub {
             }
             MethodParameterUtils.replaceUserIdIfNeeded(args, args.length - 1);
             return method.invoke(who, args);
+        }
+    }
+
+    @ProxyMethod("getInstallSourceInfo")
+    public static class GetInstallSourceInfo extends MethodHook {
+        @Override
+        protected Object hook(Object who, Method method, Object[] args) throws Throwable {
+            String packageName = args != null && args.length > 0 ? (String) args[0] : null;
+            if (packageName == null) {
+                return method.invoke(who, args);
+            }
+
+            int userId = BlackBoxCore.getUserId();
+            if (BlackBoxCore.get().isInstalled(packageName, userId)) {
+                Object info = createFakeInstallSourceInfo();
+                if (info != null) {
+                    return info;
+                }
+                // Last resort: behave like "not installed" rather than crashing the caller with NPE.
+                throw new PackageManager.NameNotFoundException(packageName);
+            }
+
+            if (AppSystemEnv.isOpenPackage(packageName)) {
+                MethodParameterUtils.replaceUserIdIfNeeded(args, args.length - 1);
+                return method.invoke(who, args);
+            }
+
+            throw new PackageManager.NameNotFoundException(packageName);
+        }
+
+        private Object createFakeInstallSourceInfo() {
+            // Privacy-first: never leak host installer / store identity. Return an object with null fields.
+            try {
+                Class<?> cls = Class.forName("android.content.pm.InstallSourceInfo");
+                Constructor<?>[] ctors = cls.getDeclaredConstructors();
+                if (ctors == null || ctors.length == 0) {
+                    return null;
+                }
+                for (Constructor<?> ctor : ctors) {
+                    try {
+                        ctor.setAccessible(true);
+                        Class<?>[] types = ctor.getParameterTypes();
+                        Object[] params = new Object[types.length];
+                        for (int i = 0; i < types.length; i++) {
+                            Class<?> t = types[i];
+                            if (t == String.class) {
+                                params[i] = null;
+                            } else if (t == int.class || t == Integer.class) {
+                                params[i] = 0;
+                            } else if (t == boolean.class || t == Boolean.class) {
+                                params[i] = false;
+                            } else {
+                                // SigningInfo / other parcelables: null
+                                params[i] = null;
+                            }
+                        }
+                        return ctor.newInstance(params);
+                    } catch (Throwable ignored) {
+                    }
+                }
+            } catch (Throwable ignored) {
+            }
+            return null;
         }
     }
 
@@ -155,12 +295,51 @@ public class IPackageManagerProxy extends BinderInvocationStub {
         }
     }
 
+    @ProxyMethod("getApplicationEnabledSetting")
+    public static class GetApplicationEnabledSetting extends MethodHook {
+        @Override
+        protected Object hook(Object who, Method method, Object[] args) throws Throwable {
+            String packageName = (String) args[0];
+            if (packageName != null && BlackBoxCore.get().isInstalled(packageName, BlackBoxCore.getUserId())) {
+                return PackageManager.COMPONENT_ENABLED_STATE_DEFAULT;
+            }
+            if (packageName != null && AppSystemEnv.isOpenPackage(packageName)) {
+                MethodParameterUtils.replaceUserIdIfNeeded(args, args.length - 1);
+                return method.invoke(who, args);
+            }
+            return PackageManager.COMPONENT_ENABLED_STATE_DISABLED;
+        }
+    }
+
+    @ProxyMethod("getComponentEnabledSetting")
+    public static class GetComponentEnabledSetting extends MethodHook {
+        @Override
+        protected Object hook(Object who, Method method, Object[] args) throws Throwable {
+            ComponentName componentName = (ComponentName) args[0];
+            String packageName = componentName != null ? componentName.getPackageName() : null;
+            if (packageName != null && BlackBoxCore.get().isInstalled(packageName, BlackBoxCore.getUserId())) {
+                return PackageManager.COMPONENT_ENABLED_STATE_DEFAULT;
+            }
+            if (packageName != null && AppSystemEnv.isOpenPackage(packageName)) {
+                MethodParameterUtils.replaceUserIdIfNeeded(args, args.length - 1);
+                return method.invoke(who, args);
+            }
+            return PackageManager.COMPONENT_ENABLED_STATE_DISABLED;
+        }
+    }
+
     @ProxyMethod("getPackageInfo")
     public static class GetPackageInfo extends MethodHook {
         @Override
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
             String packageName = (String) args[0];
             int flags = MethodParameterUtils.toInt(args[1]);
+
+            // Samsung Health SaSDK should not detect the host Samsung Account package unless the
+            // explicit per-app fallback toggle is enabled.
+            if (shouldHideHostSamsungAccountForSamsungHealth(packageName)) {
+                return null;
+            }
             
             
             if ("com.android.vending".equals(packageName)) {
@@ -379,6 +558,10 @@ public class IPackageManagerProxy extends BinderInvocationStub {
 
             int flags = MethodParameterUtils.toInt(args[1]);
 
+            if (shouldHideHostSamsungAccountForSamsungHealth(packageName)) {
+                return null;
+            }
+
 
 
             ApplicationInfo applicationInfo = BlackBoxCore.getBPackageManager().getApplicationInfo(packageName, flags, BlackBoxCore.getUserId());
@@ -404,6 +587,56 @@ public class IPackageManagerProxy extends BinderInvocationStub {
         }
     }
 
+    @ProxyMethod("queryIntentActivities")
+    public static class QueryIntentActivities extends MethodHook {
+        @Override
+        @SuppressWarnings("unchecked")
+        protected Object hook(Object who, Method method, Object[] args) throws Throwable {
+            Intent intent = MethodParameterUtils.getFirstParam(args, Intent.class);
+            String type = MethodParameterUtils.getFirstParam(args, String.class);
+            Integer flags = MethodParameterUtils.getFirstParam(args, Integer.class);
+
+            List<ResolveInfo> resolves = BlackBoxCore.getBPackageManager()
+                    .queryIntentActivities(intent, flags, type, BActivityThread.getUserId());
+
+            if (resolves != null && !resolves.isEmpty()) {
+                if (shouldHideHostSamsungAccountForSamsungHealthCaller()) {
+                    resolves = filterOutSamsungAccountActivities(resolves);
+                }
+                if (BuildCompat.isN()) {
+                    return ParceledListSliceCompat.create(resolves);
+                }
+                return resolves;
+            }
+
+            MethodParameterUtils.replaceUserIdIfNeeded(args, args.length - 1);
+            Object hostOut = method.invoke(who, args);
+
+            if (!shouldHideHostSamsungAccountForSamsungHealthCaller()) {
+                return hostOut;
+            }
+
+            List<ResolveInfo> hostList = null;
+            if (hostOut instanceof List) {
+                hostList = (List<ResolveInfo>) hostOut;
+            } else if (ParceledListSliceCompat.isParceledListSlice(hostOut)) {
+                try {
+                    hostList = Reflector.with(hostOut).method("getList").call();
+                } catch (Throwable ignored) {
+                }
+            }
+
+            hostList = filterOutSamsungAccountActivities(hostList);
+            if (hostList == null) {
+                return hostOut;
+            }
+            if (BuildCompat.isN()) {
+                return ParceledListSliceCompat.create(hostList);
+            }
+            return hostList;
+        }
+    }
+
     @ProxyMethod("queryIntentReceivers")
     public static class QueryBroadcastReceivers extends MethodHook {
         @Override
@@ -412,7 +645,7 @@ public class IPackageManagerProxy extends BinderInvocationStub {
             String type = MethodParameterUtils.getFirstParam(args, String.class);
             Integer flags = MethodParameterUtils.getFirstParam(args, Integer.class);
             List<ResolveInfo> resolves = BlackBoxCore.getBPackageManager().queryBroadcastReceivers(intent, flags, type, BActivityThread.getUserId());
-            Slog.d(TAG, "queryIntentReceivers: " + resolves);
+            Slog.d(TAG, "queryIntentReceivers count=" + (resolves == null ? 0 : resolves.size()));
 
             
             if (BuildCompat.isN()) {
@@ -441,6 +674,10 @@ public class IPackageManagerProxy extends BinderInvocationStub {
             }
             ProviderInfo providerInfo = BlackBoxCore.getBPackageManager().resolveContentProvider(authority, flags, BActivityThread.getUserId());
             if (providerInfo == null) {
+                providerInfo = BlackBoxCore.getPackageManager().resolveContentProvider(authority, flags);
+                if (providerInfo != null && AppSystemEnv.isOpenPackage(providerInfo.packageName)) {
+                    return providerInfo;
+                }
                 return method.invoke(who, args);
             }
             return providerInfo;

@@ -13,9 +13,11 @@ import android.content.pm.PackageParser;
 import android.content.pm.ProviderInfo;
 import android.content.pm.ResolveInfo;
 import android.content.pm.ServiceInfo;
+import android.database.Cursor;
 import android.net.Uri;
 import android.os.Binder;
 import android.os.RemoteException;
+import android.provider.OpenableColumns;
 import android.text.TextUtils;
 
 import java.io.File;
@@ -23,10 +25,13 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Enumeration;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
 
 import top.niunaijun.blackbox.BlackBoxCore;
 import top.niunaijun.blackbox.core.GmsCore;
@@ -123,7 +128,37 @@ public class BPackageManagerService extends IBPackageManagerService.Stub impleme
                 return query.get(0);
             }
         }
+        ResolveInfo samsungHealthFallback = resolveSamsungHealthServiceFallback(intent, flags, userId);
+        if (samsungHealthFallback != null) {
+            return samsungHealthFallback;
+        }
         return null;
+    }
+
+    private ResolveInfo resolveSamsungHealthServiceFallback(Intent intent, int flags, int userId) {
+        if (intent == null || intent.getComponent() != null) {
+            return null;
+        }
+        String packageName = intent.getPackage();
+        String action = intent.getAction();
+        if (!TextUtils.equals("com.sec.android.app.shealth", packageName)) {
+            return null;
+        }
+        if (!TextUtils.equals("com.samsung.android.sdk.healthdata.IHealthDataStore", action)
+                && !TextUtils.equals("com.samsung.android.sdk.healthdata.IPrivilegedHealth", action)) {
+            return null;
+        }
+        ComponentName component = new ComponentName(
+                "com.sec.android.app.shealth",
+                "com.samsung.android.service.health.HealthService"
+        );
+        ServiceInfo serviceInfo = getServiceInfo(component, flags, userId);
+        if (serviceInfo == null) {
+            return null;
+        }
+        ResolveInfo resolveInfo = new ResolveInfo();
+        resolveInfo.serviceInfo = serviceInfo;
+        return resolveInfo;
     }
 
     private List<ResolveInfo> queryIntentServicesInternal(Intent intent, String resolvedType, int flags, int userId) {
@@ -457,8 +492,8 @@ public class BPackageManagerService extends IBPackageManagerService.Stub impleme
                 }
                 return result;
             }
+            return mComponentResolver.queryActivities(intent, resolvedType, flags, userId);
         }
-        return Collections.emptyList();
     }
 
     @Override
@@ -649,18 +684,64 @@ public class BPackageManagerService extends IBPackageManagerService.Stub impleme
         long l = System.currentTimeMillis();
         InstallResult result = new InstallResult();
         File apkFile = null;
+        File stagedFile = null;
+        File extractedDir = null;
+        List<File> selectedSplits = null;
         try {
+            Slog.i(TAG, "installPackageAsUserLocked: userId=" + userId
+                    + " uriFile=" + option.isFlag(InstallOption.FLAG_URI_FILE)
+                    + " file=" + file);
             if (!sUserManager.exists(userId)) {
                 sUserManager.createUser(userId);
             }
             if (option.isFlag(InstallOption.FLAG_URI_FILE)) {
-                apkFile = new File(BEnvironment.getCacheDir(), UUID.randomUUID().toString() + ".apk");
-                InputStream inputStream = BlackBoxCore.getContext().getContentResolver().openInputStream(Uri.parse(file));
-                BzFileUtils.copyFile(inputStream, apkFile);
+                Uri uri = Uri.parse(file);
+                String displayName = resolveDisplayName(uri);
+                boolean isApks = displayName != null && displayName.toLowerCase().endsWith(".apks");
+                String suffix = isApks ? ".apks" : ".apk";
+                stagedFile = new File(BEnvironment.getCacheDir(), UUID.randomUUID().toString() + suffix);
+                InputStream inputStream = BlackBoxCore.getContext().getContentResolver().openInputStream(uri);
+                if (inputStream == null) {
+                    return result.installError("openInputStream returned null for uri: " + file);
+                }
+                BzFileUtils.copyFile(inputStream, stagedFile);
             } else {
-                apkFile = new File(file);
+                stagedFile = new File(file);
             }
 
+            if (stagedFile == null) {
+                return result.installError("install source is null");
+            }
+
+            if (isApksBundle(stagedFile)) {
+                extractedDir = new File(BEnvironment.getCacheDir(), "apks_" + UUID.randomUUID());
+                BzFileUtils.mkdirs(extractedDir);
+
+                List<File> extractedApks = extractApksBundle(stagedFile, extractedDir);
+                if (extractedApks == null || extractedApks.isEmpty()) {
+                    return result.installError("APKS bundle: no APK files found");
+                }
+
+                apkFile = pickBaseApk(extractedApks);
+                if (apkFile == null || !apkFile.exists()) {
+                    return result.installError("APKS bundle: could not find base APK");
+                }
+
+                selectedSplits = selectSplitApks(extractedApks, apkFile, BlackBoxCore.is64Bit());
+                StringBuilder splitNames = new StringBuilder();
+                if (selectedSplits != null) {
+                    for (File s : selectedSplits) {
+                        if (s == null) continue;
+                        if (splitNames.length() > 0) splitNames.append(", ");
+                        splitNames.append(s.getName());
+                    }
+                }
+                Slog.i(TAG, "APKS bundle: base=" + apkFile.getName()
+                        + " splits=" + (selectedSplits != null ? selectedSplits.size() : 0)
+                        + " [" + splitNames + "]");
+            } else {
+                apkFile = stagedFile;
+            }
 
 
             PackageInfo packageArchiveInfo = BlackBoxCore.getPackageManager().getPackageArchiveInfo(apkFile.getAbsolutePath(), 0);
@@ -694,6 +775,23 @@ public class BPackageManagerService extends IBPackageManagerService.Stub impleme
             }
             result.packageName = aPackage.packageName;
 
+            if (selectedSplits != null && !selectedSplits.isEmpty()) {
+                ArrayList<String> splitPaths = new ArrayList<>();
+                ArrayList<String> splitNames = new ArrayList<>();
+                for (File split : selectedSplits) {
+                    if (split == null || !split.exists()) {
+                        continue;
+                    }
+                    splitPaths.add(split.getAbsolutePath());
+                    splitNames.add(stripApkExtension(split.getName()));
+                }
+                if (!splitPaths.isEmpty()) {
+                    aPackage.applicationInfo.splitSourceDirs = splitPaths.toArray(new String[0]);
+                    aPackage.applicationInfo.splitPublicSourceDirs = aPackage.applicationInfo.splitSourceDirs;
+                    aPackage.applicationInfo.splitNames = splitNames.toArray(new String[0]);
+                }
+            }
+
             if (option.isFlag(InstallOption.FLAG_SYSTEM)) {
                 aPackage.applicationInfo = BlackBoxCore.getPackageManager().getPackageInfo(aPackage.packageName, 0).applicationInfo;
             }
@@ -718,12 +816,303 @@ public class BPackageManagerService extends IBPackageManagerService.Stub impleme
         } catch (Throwable t) {
             t.printStackTrace();
         } finally {
-            if (apkFile != null && option.isFlag(InstallOption.FLAG_URI_FILE)) {
-                BzFileUtils.deleteDir(apkFile);
+            if (stagedFile != null && option.isFlag(InstallOption.FLAG_URI_FILE)) {
+                BzFileUtils.deleteDir(stagedFile);
+            }
+            if (extractedDir != null) {
+                BzFileUtils.deleteDir(extractedDir);
             }
             Slog.d(TAG, "install finish: " + (System.currentTimeMillis() - l) + "ms");
         }
         return result;
+    }
+
+    private String resolveDisplayName(Uri uri) {
+        if (uri == null) {
+            return null;
+        }
+        Cursor cursor = null;
+        try {
+            cursor = BlackBoxCore.getContext()
+                    .getContentResolver()
+                    .query(uri, new String[]{OpenableColumns.DISPLAY_NAME}, null, null, null);
+            if (cursor == null) {
+                return null;
+            }
+            int index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
+            if (index < 0) {
+                return null;
+            }
+            if (!cursor.moveToFirst()) {
+                return null;
+            }
+            return cursor.getString(index);
+        } catch (Throwable ignored) {
+            return null;
+        } finally {
+            if (cursor != null) {
+                cursor.close();
+            }
+        }
+    }
+
+    private static boolean isApksBundle(File file) {
+        if (file == null) return false;
+        String name = file.getName();
+        if (name != null && name.toLowerCase().endsWith(".apks")) {
+            return true;
+        }
+        // Fallback: some document providers strip/rename extensions. Detect by zip content.
+        try (ZipFile zipFile = new ZipFile(file)) {
+            Enumeration<? extends ZipEntry> entries = zipFile.entries();
+            int apkCount = 0;
+            while (entries.hasMoreElements()) {
+                ZipEntry e = entries.nextElement();
+                if (e == null || e.isDirectory()) continue;
+                String n = e.getName();
+                if (n != null && n.toLowerCase().endsWith(".apk")) {
+                    apkCount++;
+                    if (apkCount >= 2) {
+                        return true;
+                    }
+                }
+            }
+        } catch (Throwable ignored) {
+            // not zip
+        }
+        return false;
+    }
+
+    private static List<File> extractApksBundle(File apksFile, File outDir) throws Exception {
+        ArrayList<File> extracted = new ArrayList<>();
+        try (ZipFile zipFile = new ZipFile(apksFile)) {
+            Enumeration<? extends ZipEntry> entries = zipFile.entries();
+            while (entries.hasMoreElements()) {
+                ZipEntry entry = entries.nextElement();
+                if (entry == null || entry.isDirectory()) {
+                    continue;
+                }
+                String name = entry.getName();
+                if (TextUtils.isEmpty(name) || !name.toLowerCase().endsWith(".apk")) {
+                    continue;
+                }
+                String safeName = safeZipEntryFileName(name);
+                if (TextUtils.isEmpty(safeName)) {
+                    continue;
+                }
+                File outFile = uniqueApkFile(outDir, safeName);
+                try (InputStream inputStream = zipFile.getInputStream(entry)) {
+                    if (inputStream == null) {
+                        continue;
+                    }
+                    BzFileUtils.copyFile(inputStream, outFile);
+                    extracted.add(outFile);
+                }
+            }
+        }
+        return extracted;
+    }
+
+    private static File pickBaseApk(List<File> apks) {
+        if (apks == null || apks.isEmpty()) {
+            return null;
+        }
+        for (File f : apks) {
+            if (f == null) continue;
+            String n = f.getName();
+            if (n == null) continue;
+            String lower = n.toLowerCase();
+            if (lower.equals("base.apk")) {
+                return f;
+            }
+            if (lower.contains("base-master") || lower.contains("base_master") || lower.endsWith("base-master.apk")) {
+                return f;
+            }
+        }
+        File best = null;
+        long bestSize = -1;
+        for (File f : apks) {
+            if (f == null) continue;
+            long size = f.length();
+            if (size > bestSize) {
+                bestSize = size;
+                best = f;
+            }
+        }
+        return best;
+    }
+
+    private static List<File> selectSplitApks(List<File> apks, File baseApk, boolean is64Bit) {
+        if (apks == null || apks.isEmpty() || baseApk == null) {
+            return Collections.emptyList();
+        }
+        ArrayList<File> nonBase = new ArrayList<>();
+        for (File f : apks) {
+            if (f == null || f.equals(baseApk)) continue;
+            nonBase.add(f);
+        }
+        if (nonBase.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        // Heuristic split selection: pick at most one ABI, one density, one language split.
+        // This mirrors typical Play/AppBundle installs and avoids loading many incompatible splits.
+        File abiSplit = null;
+        File densitySplit = null;
+        File langSplit = null;
+
+        String[] supportedAbis = null;
+        try {
+            supportedAbis = android.os.Build.SUPPORTED_ABIS;
+        } catch (Throwable ignored) {
+        }
+
+        String bestAbiKey = null;
+        if (supportedAbis != null) {
+            for (String abi : supportedAbis) {
+                if (abi == null) continue;
+                String a = abi.toLowerCase();
+                if (a.contains("x86") || a.contains("mips")) continue;
+                boolean want64 = is64Bit;
+                boolean isAbi64 = a.contains("64");
+                if (want64 != isAbi64) continue;
+                bestAbiKey = a.replace('-', '_');
+                break;
+            }
+        }
+
+        int densityDpi = 0;
+        try {
+            densityDpi = android.content.res.Resources.getSystem().getDisplayMetrics().densityDpi;
+        } catch (Throwable ignored) {
+        }
+
+        String densityKey = null;
+        if (densityDpi > 0) {
+            if (densityDpi >= 560) densityKey = "xxxhdpi";
+            else if (densityDpi >= 400) densityKey = "xxhdpi";
+            else if (densityDpi >= 280) densityKey = "xhdpi";
+            else if (densityDpi >= 200) densityKey = "hdpi";
+            else densityKey = "mdpi";
+        }
+
+        String lang = null;
+        try {
+            lang = java.util.Locale.getDefault().getLanguage();
+        } catch (Throwable ignored) {
+        }
+
+        // First pass: exact matches.
+        for (File f : nonBase) {
+            String n = f.getName();
+            if (n == null) continue;
+            String lower = n.toLowerCase();
+            if (lower.contains("x86") || lower.contains("x86_64") || lower.contains("mips")) continue;
+
+            if (abiSplit == null && bestAbiKey != null && lower.contains(bestAbiKey)) {
+                // Prefer "config.<abi>.apk" but tolerate other naming.
+                abiSplit = f;
+                continue;
+            }
+            if (densitySplit == null && densityKey != null && lower.contains(densityKey)) {
+                densitySplit = f;
+                continue;
+            }
+            if (langSplit == null && lang != null && !lang.isEmpty() && lower.contains("config." + lang.toLowerCase())) {
+                langSplit = f;
+            }
+        }
+
+        // Fallbacks: pick any matching-arch split if no exact ABI split chosen.
+        if (abiSplit == null) {
+            for (File f : nonBase) {
+                String n = f.getName();
+                if (n == null) continue;
+                String lower = n.toLowerCase();
+                if (lower.contains("x86") || lower.contains("x86_64") || lower.contains("mips")) continue;
+                boolean isArm64 = lower.contains("arm64") || lower.contains("arm64_v8a") || lower.contains("arm64-v8a");
+                boolean isArm32 = lower.contains("armeabi") || lower.contains("armeabi_v7a") || lower.contains("armeabi-v7a");
+                if (isArm64 && !is64Bit) continue;
+                if (isArm32 && is64Bit) continue;
+                if (isArm64 || isArm32) {
+                    abiSplit = f;
+                    break;
+                }
+            }
+        }
+
+        // Fallback: choose a "good" density split (highest first) if no exact.
+        if (densitySplit == null) {
+            String[] pref = new String[]{"xxxhdpi", "xxhdpi", "xhdpi", "hdpi", "mdpi", "ldpi"};
+            for (String d : pref) {
+                for (File f : nonBase) {
+                    String n = f.getName();
+                    if (n == null) continue;
+                    String lower = n.toLowerCase();
+                    if (lower.contains("config." + d)) {
+                        densitySplit = f;
+                        break;
+                    }
+                }
+                if (densitySplit != null) break;
+            }
+        }
+
+        // Fallback: english split.
+        if (langSplit == null) {
+            for (File f : nonBase) {
+                String n = f.getName();
+                if (n == null) continue;
+                String lower = n.toLowerCase();
+                if (lower.contains("config.en")) {
+                    langSplit = f;
+                    break;
+                }
+            }
+        }
+
+        ArrayList<File> result = new ArrayList<>();
+        if (abiSplit != null) result.add(abiSplit);
+        if (densitySplit != null && densitySplit != abiSplit) result.add(densitySplit);
+        if (langSplit != null && langSplit != abiSplit && langSplit != densitySplit) result.add(langSplit);
+        return result;
+    }
+
+    private static String stripApkExtension(String name) {
+        if (name == null) return "";
+        String lower = name.toLowerCase();
+        if (lower.endsWith(".apk") && name.length() > 4) {
+            return name.substring(0, name.length() - 4);
+        }
+        return name;
+    }
+
+    private static String safeZipEntryFileName(String entryName) {
+        if (entryName == null) return null;
+        String n = entryName.replace('\\', '/');
+        int idx = n.lastIndexOf('/');
+        if (idx >= 0) {
+            n = n.substring(idx + 1);
+        }
+        if (n.contains("..") || n.contains("/") || n.contains("\\")) {
+            return null;
+        }
+        return n;
+    }
+
+    private static File uniqueApkFile(File dir, String fileName) {
+        File f = new File(dir, fileName);
+        if (!f.exists()) {
+            return f;
+        }
+        String base = stripApkExtension(fileName);
+        for (int i = 1; i <= 1000; i++) {
+            File candidate = new File(dir, base + "_" + i + ".apk");
+            if (!candidate.exists()) {
+                return candidate;
+            }
+        }
+        return new File(dir, UUID.randomUUID().toString() + ".apk");
     }
 
     private PackageParser.Package parserApk(String file) {

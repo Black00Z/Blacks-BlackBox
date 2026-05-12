@@ -34,6 +34,7 @@ import black.android.util.BRSingleton;
 import top.niunaijun.blackbox.BlackBoxCore;
 import top.niunaijun.blackbox.app.BActivityThread;
 import top.niunaijun.blackbox.core.env.AppSystemEnv;
+import top.niunaijun.blackbox.core.env.SamsungHealthCompat;
 import top.niunaijun.blackbox.entity.AppConfig;
 import top.niunaijun.blackbox.entity.am.RunningAppProcessInfo;
 import top.niunaijun.blackbox.entity.am.RunningServiceInfo;
@@ -70,6 +71,10 @@ import static android.content.pm.PackageManager.PERMISSION_GRANTED;
 @ScanClass(ActivityManagerCommonProxy.class)
 public class IActivityManagerProxy extends ClassInvocationStub {
     public static final String TAG = "ActivityManagerStub";
+
+    private static final String PKG_SAMSUNG_HEALTH = "com.sec.android.app.shealth";
+    private static final String PKG_SAMSUNG_ACCOUNT = "com.osp.app.signin";
+    private static final String AUTH_SAMSUNG_ACCOUNT_MANAGER_PROVIDER = "com.samsung.android.samsungaccount.accountmanagerprovider";
 
     @Override
     protected Object getWho() {
@@ -174,6 +179,34 @@ public class IActivityManagerProxy extends ClassInvocationStub {
                             }
                         }
                     }
+                    return content;
+                }
+
+                ProviderInfo openHostProviderInfo = BlackBoxCore.getPackageManager()
+                        .resolveContentProvider((String) auth, GET_META_DATA);
+                if (openHostProviderInfo != null
+                        && AppSystemEnv.isOpenPackage(openHostProviderInfo.packageName)) {
+                    // Default Samsung Health behavior should not use the phone's Samsung Account
+                    // app/provider. Allow it only when the per-app fallback toggle is enabled.
+                    try {
+                        String callerPackage = BActivityThread.getAppPackageName();
+                        if (PKG_SAMSUNG_HEALTH.equals(callerPackage)
+                                && AUTH_SAMSUNG_ACCOUNT_MANAGER_PROVIDER.equals(auth)
+                                && PKG_SAMSUNG_ACCOUNT.equals(openHostProviderInfo.packageName)
+                                && !SamsungHealthCompat.isHostSamsungAccountFallbackEnabled(BActivityThread.getUserId(), callerPackage)) {
+                            Slog.w(TAG, "Blocked open host provider for Samsung Health (fallback disabled): "
+                                    + auth + " -> " + openHostProviderInfo.packageName);
+                            return null;
+                        }
+                    } catch (Throwable ignored) {
+                    }
+
+                    content = method.invoke(who, args);
+                    if (content != null) {
+                        ContentProviderDelegate.update(content, (String) auth);
+                    }
+                    Slog.d(TAG, "Passing through open host provider: " + auth
+                            + " -> " + openHostProviderInfo.packageName);
                     return content;
                 }
 
@@ -870,6 +903,17 @@ public class IActivityManagerProxy extends ClassInvocationStub {
                 }
             }
             return method.invoke(who, args);
+        }
+    }
+
+    @ProxyMethod("updateServiceGroup")
+    public static class UpdateServiceGroup extends MethodHook {
+        @Override
+        protected Object hook(Object who, Method method, Object[] args) {
+            // Virtual service bindings are tracked by BlackBox, not the host AMS.
+            // Forwarding host-side group updates can fail with
+            // "Could not find connection for BinderProxy" on Android 16.
+            return null;
         }
     }
 

@@ -6,6 +6,7 @@ import android.os.Looper
 import android.util.Log
 import java.util.concurrent.ConcurrentHashMap
 import top.niunaijun.blackbox.BlackBoxCore
+import top.niunaijun.blackbox.core.env.ExternalActivityGuard
 
 object AppFreezeManager {
     private const val TAG = "AppFreezeManager"
@@ -13,6 +14,7 @@ object AppFreezeManager {
     private const val KEY_GLOBAL_AUTO_FREEZE = "global_auto_freeze_enabled"
     private const val KEY_INSTANT_FREEZE_BUTTON = "instant_freeze_button_enabled"
     private const val AUTO_FREEZE_DELAY_MS = 1200L
+    private const val EXTERNAL_FLOW_RECHECK_MS = 1000L
 
     private val handler = Handler(Looper.getMainLooper())
     private val startedActivityCounts = ConcurrentHashMap<String, Int>()
@@ -64,6 +66,7 @@ object AppFreezeManager {
     fun onActivityStarted(packageName: String?, userId: Int) {
         val key = activityKey(packageName, userId) ?: return
         cancelPendingFreeze(key)
+        ExternalActivityGuard.clear(packageName, userId)
         val updatedCount = (startedActivityCounts[key] ?: 0) + 1
         startedActivityCounts[key] = updatedCount
         Log.d(TAG, "onActivityStarted: $key count=$updatedCount")
@@ -72,6 +75,7 @@ object AppFreezeManager {
     fun onActivityResumed(packageName: String?, userId: Int) {
         val key = activityKey(packageName, userId) ?: return
         cancelPendingFreeze(key)
+        ExternalActivityGuard.clear(packageName, userId)
     }
 
     fun onActivityStopped(packageName: String?, userId: Int, isChangingConfigurations: Boolean) {
@@ -101,14 +105,28 @@ object AppFreezeManager {
 
     private fun scheduleFreeze(packageName: String, userId: Int, key: String) {
         cancelPendingFreeze(key)
-        val runnable = Runnable {
-            pendingStops.remove(key)
+        lateinit var runnable: Runnable
+        runnable = Runnable {
             if (!shouldAutoFreeze(packageName, userId)) {
+                pendingStops.remove(key)
                 return@Runnable
             }
             if ((startedActivityCounts[key] ?: 0) > 0) {
+                pendingStops.remove(key)
                 return@Runnable
             }
+            val remainingMs = ExternalActivityGuard.getRemainingMs(packageName, userId)
+            if (remainingMs > 0L) {
+                val retryDelayMs = minOf(remainingMs, EXTERNAL_FLOW_RECHECK_MS)
+                Log.d(
+                        TAG,
+                        "Delaying auto-freeze for external activity flow: $packageName userId=$userId remainingMs=$remainingMs"
+                )
+                pendingStops[key] = runnable
+                handler.postDelayed(runnable, retryDelayMs)
+                return@Runnable
+            }
+            pendingStops.remove(key)
             try {
                 Log.i(TAG, "Auto-freezing package after exit: $packageName userId=$userId")
                 BlackBoxCore.get().stopPackage(packageName, userId)

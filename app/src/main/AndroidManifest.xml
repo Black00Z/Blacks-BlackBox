@@ -10,6 +10,7 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="29" />
+    <uses-permission android:name="com.samsung.android.samsungaccount.permission.ACCOUNT_MANAGER" />
 
 
     <application
@@ -26,6 +27,22 @@
         <activity
             android:name=".view.fake.FollowMyLocationOverlay"
             android:exported="false" />
+        <activity
+            android:name=".view.shealth.SaSdkRedirectActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.NoDisplay">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:host="samsunghealthhybridweb"
+                    android:scheme="sasdk" />
+            </intent-filter>
+        </activity>
         <activity android:name=".view.setting.SettingActivity" />
         <activity android:name=".view.gms.GmsManagerActivity" />
         <activity android:name=".view.spoof.DeviceSpoofingActivity" />
@@ -58,6 +75,32 @@
                 <action android:name="android.intent.action.SEND_MULTIPLE" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="video/*" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name=".view.install.ApkInstallImportActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:label="@string/apk_install_share_label">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data
+                    android:mimeType="application/vnd.android.package-archive"
+                    android:scheme="content" />
+                <data
+                    android:mimeType="application/vnd.android.package-archive"
+                    android:scheme="file" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/vnd.android.package-archive" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/vnd.android.package-archive" />
             </intent-filter>
         </activity>
         <activity

@@ -1,26 +1,30 @@
 package top.niunaijun.blackbox.fake.service;
 
+import android.app.PendingIntent;
 import android.content.Context;
 import android.location.LocationManager;
+import android.os.IBinder;
 import android.os.IInterface;
 import android.util.Log;
 
 import java.lang.reflect.Method;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 
-import black.android.location.BRILocationListener;
 import black.android.location.BRILocationManagerStub;
 import black.android.location.provider.BRProviderProperties;
-import black.android.location.provider.ProviderProperties;
 import black.android.os.BRServiceManager;
 import top.niunaijun.blackbox.app.BActivityThread;
 import top.niunaijun.blackbox.entity.location.BLocation;
+import top.niunaijun.blackbox.fake.location.FakeLocationPendingIntentDispatcher;
 import top.niunaijun.blackbox.fake.frameworks.BLocationManager;
 import top.niunaijun.blackbox.fake.hook.BinderInvocationStub;
 import top.niunaijun.blackbox.fake.hook.MethodHook;
 import top.niunaijun.blackbox.fake.hook.ProxyMethod;
 import top.niunaijun.blackbox.utils.MethodParameterUtils;
+import top.niunaijun.blackbox.utils.compat.ParceledListSliceCompat;
 
 
 public class ILocationManagerProxy extends BinderInvocationStub {
@@ -61,8 +65,118 @@ public class ILocationManagerProxy extends BinderInvocationStub {
                 return null;
             }
         }
+
+        // Privacy-first: if fake-location disabled, avoid accidentally falling through to the host
+        // for location getters / update registration that may not have explicit @ProxyMethod hooks
+        // on some OEM/framework builds.
+        try {
+            if (!BLocationManager.isFakeLocationEnable() && method != null) {
+                String n = method.getName();
+                if ("getLastLocation".equals(n) || "getLastKnownLocation".equals(n)) {
+                    return null;
+                }
+                if ("requestLocationUpdates".equals(n) || "registerLocationListener".equals(n) || "getCurrentLocation".equals(n)) {
+                    return defaultReturn(method);
+                }
+            }
+        } catch (Throwable ignored) {
+        }
         
         return super.invoke(proxy, method, args);
+    }
+
+    private static Object defaultReturn(Method method) {
+        if (method == null) {
+            return null;
+        }
+        Class<?> rt = method.getReturnType();
+        if (rt == null || rt == Void.TYPE) {
+            return null;
+        }
+        if (rt == Boolean.TYPE) {
+            return true;
+        }
+        if (rt == Integer.TYPE) {
+            return 0;
+        }
+        if (rt == Long.TYPE) {
+            return 0L;
+        }
+        if (rt == Float.TYPE) {
+            return 0f;
+        }
+        if (rt == Double.TYPE) {
+            return 0d;
+        }
+        if (rt == Short.TYPE) {
+            return (short) 0;
+        }
+        if (rt == Byte.TYPE) {
+            return (byte) 0;
+        }
+        if (rt == Character.TYPE) {
+            return (char) 0;
+        }
+        return null;
+    }
+
+    private static String safeGetInterfaceDescriptor(IBinder binder) {
+        if (binder == null) {
+            return null;
+        }
+        try {
+            return binder.getInterfaceDescriptor();
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    private static boolean looksLikeLocationListener(IBinder binder) {
+        String desc = safeGetInterfaceDescriptor(binder);
+        return desc != null && (desc.contains("ILocationListener") || desc.contains("location.ILocationListener"));
+    }
+
+    private static IBinder findBestBinderCandidate(Object[] args) {
+        if (args == null) {
+            return null;
+        }
+        IBinder firstBinder = null;
+        for (Object arg : args) {
+            if (arg == null) {
+                continue;
+            }
+            IBinder b = null;
+            if (arg instanceof IInterface) {
+                try {
+                    b = ((IInterface) arg).asBinder();
+                } catch (Throwable ignored) {
+                }
+            } else if (arg instanceof IBinder) {
+                b = (IBinder) arg;
+            }
+            if (b == null) {
+                continue;
+            }
+            if (firstBinder == null) {
+                firstBinder = b;
+            }
+            if (looksLikeLocationListener(b)) {
+                return b;
+            }
+        }
+        return firstBinder;
+    }
+
+    private static PendingIntent findPendingIntent(Object[] args) {
+        if (args == null) {
+            return null;
+        }
+        for (Object arg : args) {
+            if (arg instanceof PendingIntent) {
+                return (PendingIntent) arg;
+            }
+        }
+        return null;
     }
 
     @ProxyMethod("registerGnssStatusCallback")
@@ -81,19 +195,11 @@ public class ILocationManagerProxy extends BinderInvocationStub {
         @Override
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
             if (BLocationManager.isFakeLocationEnable()) {
-                return BLocationManager.get().getLocation(BActivityThread.getUserId(), BActivityThread.getAppPackageName()).convert2SystemLocation();
+                BLocation loc = BLocationManager.get().getLocation(BActivityThread.getUserId(), BActivityThread.getAppPackageName());
+                return loc != null ? loc.convert2SystemLocation() : null;
             }
-            
-            
-            try {
-                return method.invoke(who, args);
-            } catch (Exception e) {
-                if (e.getCause() instanceof SecurityException) {
-                    Log.w(TAG, "Location permission denied, returning null for getLastLocation");
-                    return null;
-                }
-                throw e;
-            }
+            // Privacy-first default: do not forward host location when fake-location disabled.
+            return null;
         }
     }
 
@@ -103,19 +209,10 @@ public class ILocationManagerProxy extends BinderInvocationStub {
         @Override
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
             if (BLocationManager.isFakeLocationEnable()) {
-                return BLocationManager.get().getLocation(BActivityThread.getUserId(), BActivityThread.getAppPackageName()).convert2SystemLocation();
+                BLocation loc = BLocationManager.get().getLocation(BActivityThread.getUserId(), BActivityThread.getAppPackageName());
+                return loc != null ? loc.convert2SystemLocation() : null;
             }
-            
-            
-            try {
-                return method.invoke(who, args);
-            } catch (Exception e) {
-                if (e.getCause() instanceof SecurityException) {
-                    Log.w(TAG, "Location permission denied, returning null for getLastKnownLocation");
-                    return null;
-                }
-                throw e;
-            }
+            return null;
         }
     }
 
@@ -125,23 +222,119 @@ public class ILocationManagerProxy extends BinderInvocationStub {
         @Override
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
             if (BLocationManager.isFakeLocationEnable()) {
-                if (args[1] instanceof IInterface) {
-                    IInterface listener = (IInterface) args[1];
-                    BLocationManager.get().requestLocationUpdates(listener.asBinder());
-                    return 0;
+                IBinder binder = findBestBinderCandidate(args);
+                if (binder != null) {
+                    BLocationManager.get().requestLocationUpdates(binder);
+                    return defaultReturn(method);
+                }
+
+                PendingIntent pendingIntent = findPendingIntent(args);
+                if (pendingIntent != null) {
+                    FakeLocationPendingIntentDispatcher.register(pendingIntent);
+                    return defaultReturn(method);
+                }
+
+                // Fake location enabled, but no supported callback type found.
+                return defaultReturn(method);
+            }
+            // Privacy-first: do not register for host location updates when fake disabled.
+            return defaultReturn(method);
+        }
+    }
+
+    @ProxyMethod("registerLocationListener")
+    public static class RegisterLocationListener extends MethodHook {
+        @Override
+        protected Object hook(Object who, Method method, Object[] args) throws Throwable {
+            if (BLocationManager.isFakeLocationEnable()) {
+                IBinder binder = findBestBinderCandidate(args);
+                if (binder != null) {
+                    BLocationManager.get().requestLocationUpdates(binder);
+                    return defaultReturn(method);
+                }
+
+                PendingIntent pendingIntent = findPendingIntent(args);
+                if (pendingIntent != null) {
+                    FakeLocationPendingIntentDispatcher.register(pendingIntent);
+                    return defaultReturn(method);
+                }
+
+                return defaultReturn(method);
+            }
+            return defaultReturn(method);
+        }
+    }
+
+    @ProxyMethod("getCurrentLocation")
+    public static class GetCurrentLocation extends MethodHook {
+        @Override
+        protected Object hook(Object who, Method method, Object[] args) throws Throwable {
+            if (!BLocationManager.isFakeLocationEnable()) {
+                // Privacy-first: avoid forwarding to host.
+                return defaultReturn(method);
+            }
+
+            BLocation loc = BLocationManager.get().getLocation(BActivityThread.getUserId(), BActivityThread.getAppPackageName());
+            if (loc == null) {
+                return defaultReturn(method);
+            }
+            android.location.Location sys = loc.convert2SystemLocation();
+
+            // Best-effort: deliver to any callback-ish binder in args (modern API).
+            Object callback = null;
+            if (args != null) {
+                for (Object arg : args) {
+                    if (arg instanceof IInterface) {
+                        String desc = safeGetInterfaceDescriptor(((IInterface) arg).asBinder());
+                        if (desc != null && desc.contains("ILocationCallback")) {
+                            callback = arg;
+                            break;
+                        }
+                    }
                 }
             }
-            
-            
-            try {
-                return method.invoke(who, args);
-            } catch (Exception e) {
-                if (e.getCause() instanceof SecurityException) {
-                    Log.w(TAG, "Location permission denied for requestLocationUpdates, returning 0");
-                    return 0;
+            if (callback != null) {
+                try {
+                    for (Method m : callback.getClass().getMethods()) {
+                        if (m == null) {
+                            continue;
+                        }
+                        if (!"onLocation".equals(m.getName()) && !"onLocationResult".equals(m.getName()) && !"onLocationChanged".equals(m.getName())) {
+                            continue;
+                        }
+                        Class<?>[] p = m.getParameterTypes();
+                        if (p == null || p.length != 1) {
+                            continue;
+                        }
+                        if (p[0] == android.location.Location.class) {
+                            m.invoke(callback, sys);
+                            return defaultReturn(method);
+                        }
+                        if (List.class.isAssignableFrom(p[0])) {
+                            m.invoke(callback, Collections.singletonList(sys));
+                            return defaultReturn(method);
+                        }
+                        try {
+                            Class<?> sliceClass = black.android.content.pm.BRParceledListSlice.getRealClass();
+                            if (sliceClass != null && p[0] == sliceClass) {
+                                Object slice = ParceledListSliceCompat.create(Collections.singletonList(sys));
+                                m.invoke(callback, slice);
+                                return defaultReturn(method);
+                            }
+                        } catch (Throwable ignored) {
+                        }
+                    }
+                } catch (Throwable t) {
+                    Log.w(TAG, "getCurrentLocation callback deliver failed: " + t.getMessage());
                 }
-                throw e;
             }
+
+            // Fallback: if this call used an ILocationListener, register it for periodic updates.
+            IBinder binder = findBestBinderCandidate(args);
+            if (binder != null) {
+                BLocationManager.get().requestLocationUpdates(binder);
+            }
+            return defaultReturn(method);
         }
     }
 
@@ -150,12 +343,27 @@ public class ILocationManagerProxy extends BinderInvocationStub {
 
         @Override
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
-            if (args[0] instanceof IInterface) {
-                IInterface listener = (IInterface) args[0];
-                BLocationManager.get().removeUpdates(listener.asBinder());
-                return 0;
+            PendingIntent pendingIntent = findPendingIntent(args);
+            if (pendingIntent != null) {
+                FakeLocationPendingIntentDispatcher.unregister(pendingIntent);
             }
-            return method.invoke(who, args);
+            IBinder binder = findBestBinderCandidate(args);
+            if (binder != null) {
+                BLocationManager.get().removeUpdates(binder);
+            }
+
+            if (BLocationManager.isFakeLocationEnable()) {
+                return defaultReturn(method);
+            }
+            try {
+                return method.invoke(who, args);
+            } catch (Exception e) {
+                if (e.getCause() instanceof SecurityException) {
+                    Log.w(TAG, "Location permission denied for removeUpdates, returning default");
+                    return defaultReturn(method);
+                }
+                throw e;
+            }
         }
     }
 
@@ -164,14 +372,48 @@ public class ILocationManagerProxy extends BinderInvocationStub {
 
         @Override
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
-            Object providerProperties = method.invoke(who, args);
+            Object providerProperties;
+            try {
+                providerProperties = method.invoke(who, args);
+            } catch (Exception e) {
+                if (e.getCause() instanceof SecurityException) {
+                    Log.w(TAG, "Location permission denied for getProviderProperties, returning null");
+                    return null;
+                }
+                throw e;
+            }
             if (BLocationManager.isFakeLocationEnable()) {
                 BRProviderProperties.get(providerProperties)._set_mHasNetworkRequirement(false);
                 if (BLocationManager.get().getCell(BActivityThread.getUserId(), BActivityThread.getAppPackageName()) == null) {
                     BRProviderProperties.get(providerProperties)._set_mHasCellRequirement(false);
                 }
             }
-            return method.invoke(who, args);
+            return providerProperties;
+        }
+    }
+
+    @ProxyMethod("isLocationEnabledForUser")
+    public static class IsLocationEnabledForUser extends MethodHook {
+        @Override
+        protected Object hook(Object who, Method method, Object[] args) throws Throwable {
+            // Virtual environment: prefer "enabled" to avoid framework/service enforcement
+            // killing location-dependent SDKs when host location mode is off.
+            if (BLocationManager.isFakeLocationEnable()) {
+                return true;
+            }
+            // Privacy-first: if fake-location disabled, report disabled.
+            return false;
+        }
+    }
+
+    @ProxyMethod("isLocationEnabled")
+    public static class IsLocationEnabled extends MethodHook {
+        @Override
+        protected Object hook(Object who, Method method, Object[] args) throws Throwable {
+            if (BLocationManager.isFakeLocationEnable()) {
+                return true;
+            }
+            return false;
         }
     }
 
@@ -202,7 +444,35 @@ public class ILocationManagerProxy extends BinderInvocationStub {
 
         @Override
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
-            return Arrays.asList(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER);
+            if (BLocationManager.isFakeLocationEnable()) {
+                return Arrays.asList(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER, LocationManager.PASSIVE_PROVIDER);
+            }
+            return method.invoke(who, args);
+        }
+    }
+
+    @ProxyMethod("getProviders")
+    public static class GetProviders extends MethodHook {
+        @Override
+        protected Object hook(Object who, Method method, Object[] args) throws Throwable {
+            if (BLocationManager.isFakeLocationEnable()) {
+                return Arrays.asList(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER, LocationManager.PASSIVE_PROVIDER);
+            }
+            return method.invoke(who, args);
+        }
+    }
+
+    @ProxyMethod("isProviderEnabled")
+    public static class IsProviderEnabled extends MethodHook {
+        @Override
+        protected Object hook(Object who, Method method, Object[] args) throws Throwable {
+            if (!BLocationManager.isFakeLocationEnable()) {
+                return method.invoke(who, args);
+            }
+            String provider = args != null && args.length > 0 ? (String) args[0] : null;
+            return Objects.equals(provider, LocationManager.GPS_PROVIDER)
+                    || Objects.equals(provider, LocationManager.NETWORK_PROVIDER)
+                    || Objects.equals(provider, LocationManager.PASSIVE_PROVIDER);
         }
     }
 
@@ -211,8 +481,13 @@ public class ILocationManagerProxy extends BinderInvocationStub {
 
         @Override
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
-            String provider = (String) args[0];
-            return Objects.equals(provider, LocationManager.GPS_PROVIDER);
+            if (!BLocationManager.isFakeLocationEnable()) {
+                return method.invoke(who, args);
+            }
+            String provider = args != null && args.length > 0 ? (String) args[0] : null;
+            return Objects.equals(provider, LocationManager.GPS_PROVIDER)
+                    || Objects.equals(provider, LocationManager.NETWORK_PROVIDER)
+                    || Objects.equals(provider, LocationManager.PASSIVE_PROVIDER);
         }
     }
 

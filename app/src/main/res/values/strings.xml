@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Blacks BlackBox</string>
+    <string name="app_name">Black\'s BlackBox</string>
     <string name="choose">Choose</string>
     <string name="choose_app">Choose App</string>
     <string name="installed_app">Installed App</string>
@@ -11,24 +11,28 @@
     <string name="xp_setting">Xposed Setting</string>
     <string name="tg_group">Telegram Group</string>
     <string name="fake_location">Fake Location(Preview)</string>
+    <string name="fake_location_pick">Pick fake location</string>
     <string name="device_spoofing">Device Spoofing</string>
-    <string name="blackbox_gallery_title">BlackBox Gallery</string>
-    <string name="blackbox_gallery_menu">BlackBox Gallery</string>
-    <string name="blackbox_gallery_choose_user">Choose BlackBox user</string>
+    <string name="blackbox_gallery_title">Black\'s BlackBox Gallery</string>
+    <string name="blackbox_gallery_menu">Black\'s BlackBox Gallery</string>
+    <string name="blackbox_gallery_choose_user">Choose Black\'s BlackBox user</string>
     <string name="blackbox_gallery_refresh">Refresh</string>
     <string name="blackbox_gallery_open_guest">Open Guest App</string>
     <string name="blackbox_gallery_delete">Delete</string>
     <string name="blackbox_gallery_empty">No imported media yet.</string>
-    <string name="blackbox_gallery_importing">Importing into BlackBox Gallery…</string>
-    <string name="blackbox_gallery_import_empty">No media was shared to BlackBox</string>
+    <string name="blackbox_gallery_importing">Importing into Black\'s BlackBox Gallery…</string>
+    <string name="blackbox_gallery_import_empty">No media was shared to Black\'s BlackBox</string>
     <string name="blackbox_gallery_import_failed">Import failed</string>
-    <string name="blackbox_gallery_imported_count">Imported %1$d item(s) into BlackBox Gallery</string>
+    <string name="blackbox_gallery_imported_count">Imported %1$d item(s) into Black\'s BlackBox Gallery</string>
     <string name="blackbox_gallery_open_guest_failed">Could not open the guest gallery app</string>
     <string name="blackbox_gallery_item_missing">This media item is no longer available</string>
     <string name="blackbox_gallery_delete_failed">Could not delete this media item</string>
-    <string name="blackbox_gallery_share_label">Send to BlackBox Gallery</string>
+    <string name="blackbox_gallery_share_to_app">Share to app</string>
+    <string name="blackbox_gallery_share_no_targets">No app inside Black\'s BlackBox can receive this media</string>
+    <string name="blackbox_gallery_share_failed">Could not share this media</string>
+    <string name="blackbox_gallery_share_label">Send to Black\'s BlackBox Gallery</string>
     <string name="blackbox_gallery_video_badge">VIDEO</string>
-    <string name="device_spoofing_summary">Change the visible device identity for the current BlackBox profile. These values stay inside the container and apply to apps launched in this profile.</string>
+    <string name="device_spoofing_summary">Change the visible device identity for the current Black\'s BlackBox profile. These values stay inside the container and apply to apps launched in this profile.</string>
     <string name="device_spoofing_manufacturer">Device Manufacturer</string>
     <string name="device_spoofing_model">Device Model</string>
     <string name="device_spoofing_android_id">Android ID</string>
@@ -36,7 +40,7 @@
     <string name="device_spoofing_reset_to_default">Reset to Default</string>
     <string name="device_spoofing_samsung_preset">Samsung</string>
     <string name="device_spoofing_saved">Device spoofing was updated for this profile</string>
-    <string name="device_spoofing_reset">BlackBox default device values were restored</string>
+    <string name="device_spoofing_reset">Black\'s BlackBox default device values were restored</string>
     <string name="device_spoofing_samsung_loaded">Samsung Galaxy S26+ values loaded. Tap Accept Change to save them.</string>
     <string name="device_spoofing_invalid_android_id">Android ID must be 16 hexadecimal characters</string>
     <string name="device_spoofing_fill_required">Device Manufacturer and Device Model are required</string>
@@ -68,15 +72,27 @@
     <string name="app_excluded_from_auto_freeze_disabled">This app will freeze normally again</string>
     <string name="app_is_frozen">%s was frozen</string>
     <string name="app_clear">Clear Data</string>
+
+    <string name="shealth_login_fallback_enable">Enable Samsung login fallback</string>
+    <string name="shealth_login_fallback_disable">Disable Samsung login fallback</string>
+    <string name="shealth_login_fallback_dialog_title">Samsung Health login fallback</string>
+    <string name="shealth_login_fallback_dialog_message">Enable a fallback sign-in path that opens the phone Samsung Account app (outside BlackBox). Default behavior stays in BlackBox and should use a browser-based flow.</string>
+    <string name="shealth_login_fallback_enabled">Samsung login fallback enabled for this app</string>
+    <string name="shealth_login_fallback_disabled">Samsung login fallback disabled for this app</string>
     <string name="app_clear_hint">Clear Data for %s?</string>
     <string name="app_remove">Uninstall App</string>
     <string name="app_shortcut">Create Shortcut</string>
     <string name="shortcut_name">Shortcut Name</string>
     <string name="try_add_shortcut">Try Added To Desktop</string>
-    <string name="add_shortcut_fail_msg">If the addition fails, please go to system settings and open the permission of "create desktop shortcut" for BlackBox</string>
+    <string name="add_shortcut_fail_msg">If the addition fails, please go to system settings and open the permission of "create desktop shortcut" for Black\'s BlackBox</string>
     <string name="install_success">Installed Successfully</string>
     <string name="install_fail">Installed Failed: %s</string>
     <string name="install_fail_no_msg">Installed Failed</string>
+    <string name="apk_install_share_label">Install into Black\'s BlackBox</string>
+    <string name="apk_install_importing">Installing APK into Black\'s BlackBox…</string>
+    <string name="apk_install_import_empty">No APK was shared to Black\'s BlackBox</string>
+    <string name="apk_install_import_failed">APK install failed</string>
+    <string name="apk_install_imported_count">Installed %1$d APK(s)</string>
     <string name="uninstall_success">Uninstalled Successfully</string>
     <string name="uninstall_fail">Uninstalled Failed</string>
     <string name="uninstall_app">Uninstall App</string>
@@ -106,14 +122,14 @@
 
     <string name="auto_freeze_toggle_button">Toggle auto-freeze</string>
     <string name="auto_freeze_toggle_title">Activate auto-freeze?</string>
-    <string name="auto_freeze_toggle_message">This button allows Black\'s BBox to freeze any app and any activity when you leave the BlackBox. Activate it?</string>
+    <string name="auto_freeze_toggle_message">This button allows Black\'s BlackBox to freeze any app and any activity when you leave Black\'s BlackBox. Activate it?</string>
     <string name="auto_freeze_toggle_on">Auto-freeze is active</string>
     <string name="auto_freeze_toggle_off">Auto-freeze is inactive</string>
-    <string name="auto_freeze_master_enabled">Apps will be frozen automatically when you leave the BlackBox</string>
+    <string name="auto_freeze_master_enabled">Apps will be frozen automatically when you leave Black\'s BlackBox</string>
     <string name="auto_freeze_master_disabled">Automatic freezing is turned off</string>
 
     <string name="host_signing_fallback_title">Fallback for Some Apps</string>
-    <string name="host_signing_fallback_summary">Allows the host to communicate with Blacks B-Box</string>
+    <string name="host_signing_fallback_summary">Allows the host to communicate with Black\'s BlackBox</string>
     <string name="host_signing_fallback_dialog_title">Fallback for Some Apps</string>
     <string name="host_signing_fallback_dialog_message">Enabling this may attach real host signing/certificate data for certain package checks to improve compatibility on newer Android versions. This can reduce sandbox privacy by exposing host signature information to apps requesting it. Enable only if an app fails to start or shows Google/Meta certificate errors.</string>
     <string name="enable">Enable</string>
@@ -132,7 +148,7 @@
     <string name="send_logs_summary">Create a debug log and share it with any app</string>
 
     <string name="about_title">About</string>
-    <string name="about_owner_title">Black00Z - Blacks BlackBox</string>
+    <string name="about_owner_title">Black00Z - Black\'s BlackBox</string>
     <string name="about_owner_summary">Author and maintainer</string>
     <string name="about_link_summary">Tap to open source</string>
 

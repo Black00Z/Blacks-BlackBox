@@ -139,6 +139,10 @@ public class BEnvironment {
         return new File(sVirtualRoot, "data/app/" + packageName + "/base.apk");
     }
 
+    public static File getSplitApkDir(String packageName) {
+        return new File(getAppDir(packageName), "splits");
+    }
+
     public static File getAppLibDir(String packageName) {
         return new File(getAppDir(packageName), "lib");
     }

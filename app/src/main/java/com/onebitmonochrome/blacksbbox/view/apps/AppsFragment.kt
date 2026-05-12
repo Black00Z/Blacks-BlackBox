@@ -19,6 +19,7 @@ import androidx.recyclerview.widget.RecyclerView
 import cbfg.rvadapter.RVAdapter
 import com.afollestad.materialdialogs.MaterialDialog
 import top.niunaijun.blackbox.BlackBoxCore
+import top.niunaijun.blackbox.core.env.SamsungHealthCompat
 import com.onebitmonochrome.blacksbbox.R
 import com.onebitmonochrome.blacksbbox.app.AppFreezeManager
 import com.onebitmonochrome.blacksbbox.bean.AppInfo
@@ -337,6 +338,16 @@ class AppsFragment : Fragment() {
                         if (!AppFreezeManager.isGlobalAutoFreezeEnabled()) {
                             it.menu.removeItem(R.id.app_freeze_options)
                         }
+
+                        val isSamsungHealth = data.packageName == "com.sec.android.app.shealth"
+                        if (!isSamsungHealth) {
+                            it.menu.removeItem(R.id.app_shealth_login_fallback)
+                        } else {
+                            val enabled = SamsungHealthCompat.isHostSamsungAccountFallbackEnabled(userID, data.packageName)
+                            it.menu.findItem(R.id.app_shealth_login_fallback)?.setTitle(
+                                    if (enabled) R.string.shealth_login_fallback_disable else R.string.shealth_login_fallback_enable
+                            )
+                        }
                         it.setOnMenuItemClickListener { item ->
                             try {
                                 when (item.itemId) {
@@ -363,6 +374,10 @@ class AppsFragment : Fragment() {
                                     R.id.app_freeze_options -> {
                                         showFreezeOptions(data)
                                     }
+
+                                    R.id.app_shealth_login_fallback -> {
+                                        toggleSamsungHealthLoginFallback(data)
+                                    }
                                 }
                                 return@setOnMenuItemClickListener true
                             } catch (e: Exception) {
@@ -378,6 +393,29 @@ class AppsFragment : Fragment() {
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error in setOnLongClick: ${e.message}")
+        }
+    }
+
+    private fun toggleSamsungHealthLoginFallback(info: AppInfo) {
+        try {
+            val enabled = SamsungHealthCompat.isHostSamsungAccountFallbackEnabled(userID, info.packageName)
+            if (enabled) {
+                SamsungHealthCompat.setHostSamsungAccountFallbackEnabled(userID, info.packageName, false)
+                requireContext().toast(getString(R.string.shealth_login_fallback_disabled))
+                return
+            }
+
+            AlertDialog.Builder(requireContext())
+                    .setTitle(R.string.shealth_login_fallback_dialog_title)
+                    .setMessage(R.string.shealth_login_fallback_dialog_message)
+                    .setPositiveButton(R.string.enable) { _, _ ->
+                        SamsungHealthCompat.setHostSamsungAccountFallbackEnabled(userID, info.packageName, true)
+                        requireContext().toast(getString(R.string.shealth_login_fallback_enabled))
+                    }
+                    .setNegativeButton(R.string.cancel, null)
+                    .show()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error toggling Samsung Health login fallback: ${e.message}")
         }
     }
     

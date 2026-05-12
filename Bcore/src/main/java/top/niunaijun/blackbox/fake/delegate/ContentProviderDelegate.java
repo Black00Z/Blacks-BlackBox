@@ -3,6 +3,7 @@ package top.niunaijun.blackbox.fake.delegate;
 import android.net.Uri;
 import android.os.Build;
 import android.os.IInterface;
+import android.text.TextUtils;
 import android.util.ArrayMap;
 
 import java.lang.reflect.Proxy;
@@ -20,14 +21,47 @@ import black.android.providers.BRSettingsNameValueCacheOreo;
 import black.android.providers.BRSettingsSecure;
 import black.android.providers.BRSettingsSystem;
 import top.niunaijun.blackbox.BlackBoxCore;
+import top.niunaijun.blackbox.app.BActivityThread;
 import top.niunaijun.blackbox.fake.service.context.providers.ContentProviderStub;
 import top.niunaijun.blackbox.fake.service.context.providers.SystemProviderStub;
+import top.niunaijun.blackbox.fake.service.context.providers.VirtualMediaProviderStub;
 import top.niunaijun.blackbox.utils.compat.BuildCompat;
 
 
 public class ContentProviderDelegate {
     public static final String TAG = "ContentProviderDelegate";
     private static Set<String> sInjected = new HashSet<>();
+
+    private static String resolveCallerPackage() {
+        try {
+            String appPackageName = BActivityThread.getAppPackageName();
+            if (!TextUtils.isEmpty(appPackageName)) {
+                return appPackageName;
+            }
+        } catch (Throwable ignored) {
+        }
+        return BlackBoxCore.getHostPkg();
+    }
+
+    private static String resolveProviderCallerPackage(String auth) {
+        if ("settings".equals(auth)) {
+            return BlackBoxCore.getHostPkg();
+        }
+        return resolveCallerPackage();
+    }
+
+    private static IInterface wrapProvider(IInterface provider, String auth) {
+        String callerPackage = resolveProviderCallerPackage(auth);
+        switch (auth) {
+            case "media":
+                return new VirtualMediaProviderStub().wrapper(provider, callerPackage);
+            case "telephony":
+            case "settings":
+                return new SystemProviderStub().wrapper(provider, callerPackage);
+            default:
+                return new ContentProviderStub().wrapper(provider, callerPackage);
+        }
+    }
 
     public static void update(Object holder, String auth) {
         IInterface iInterface;
@@ -39,17 +73,7 @@ public class ContentProviderDelegate {
 
         if (iInterface instanceof Proxy)
             return;
-        IInterface bContentProvider;
-        switch (auth) {
-            case "media":
-            case "telephony":
-            case "settings":
-                bContentProvider = new SystemProviderStub().wrapper(iInterface, BlackBoxCore.getHostPkg());
-                break;
-            default:
-                bContentProvider = new ContentProviderStub().wrapper(iInterface, BlackBoxCore.getHostPkg());
-                break;
-        }
+        IInterface bContentProvider = wrapProvider(iInterface, auth);
         if (BuildCompat.isOreo()) {
             BRContentProviderHolderOreo.get(holder)._set_provider(bContentProvider);
         } else {
@@ -73,7 +97,8 @@ public class ContentProviderDelegate {
             if (!sInjected.contains(providerName)) {
                 sInjected.add(providerName);
                 final IInterface iInterface = BRActivityThreadProviderClientRecordP.get(value).mProvider();
-                BRActivityThreadProviderClientRecordP.get(value)._set_mProvider(new ContentProviderStub().wrapper(iInterface, BlackBoxCore.getHostPkg()));
+                BRActivityThreadProviderClientRecordP.get(value)._set_mProvider(
+                        wrapProvider(iInterface, providerName));
                 BRActivityThreadProviderClientRecordP.get(value)._set_mNames(new String[]{providerName});
             }
         }

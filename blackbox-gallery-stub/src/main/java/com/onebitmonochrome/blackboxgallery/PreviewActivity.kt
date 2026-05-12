@@ -2,9 +2,12 @@ package com.onebitmonochrome.blackboxgallery
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ResolveInfo
+import android.content.ClipData
 import android.net.Uri
 import android.os.Bundle
 import android.widget.MediaController
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.snackbar.Snackbar
 import com.onebitmonochrome.blackboxgallery.databinding.ActivityPreviewBinding
@@ -28,6 +31,9 @@ class PreviewActivity : AppCompatActivity() {
         supportActionBar?.title = intent.getStringExtra(EXTRA_NAME) ?: getString(R.string.app_name)
 
         bindMedia()
+        binding.shareButton.setOnClickListener {
+            shareInsideBlackBox()
+        }
         binding.deleteButton.setOnClickListener {
             val deleted = contentResolver.delete(mediaUri, null, null) > 0
             if (deleted) {
@@ -56,16 +62,60 @@ class PreviewActivity : AppCompatActivity() {
         }
     }
 
+    private fun shareInsideBlackBox() {
+        val mimeType = intent.getStringExtra(EXTRA_MIME_TYPE)
+            ?: if (isVideo) "video/*" else "image/*"
+        val baseIntent = Intent(Intent.ACTION_SEND).apply {
+            type = mimeType
+            putExtra(Intent.EXTRA_STREAM, mediaUri)
+            clipData = ClipData.newUri(contentResolver, "media", mediaUri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+
+        val targets = packageManager.queryIntentActivities(baseIntent, 0)
+            .filter { it.activityInfo?.packageName != packageName }
+            .sortedBy { it.loadLabel(packageManager).toString().lowercase() }
+
+        if (targets.isEmpty()) {
+            Snackbar.make(binding.root, R.string.share_no_targets, Snackbar.LENGTH_SHORT).show()
+            return
+        }
+
+        val labels = targets.map { it.loadLabel(packageManager).toString() }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle(R.string.share_to_app)
+            .setItems(labels) { _, which ->
+                startShareTarget(baseIntent, targets[which])
+            }
+            .show()
+    }
+
+    private fun startShareTarget(baseIntent: Intent, target: ResolveInfo) {
+        val info = target.activityInfo ?: return
+        val shareIntent = Intent(baseIntent).apply {
+            setClassName(info.packageName, info.name)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        try {
+            startActivity(shareIntent)
+        } catch (e: Exception) {
+            Snackbar.make(binding.root, R.string.share_failed, Snackbar.LENGTH_SHORT).show()
+        }
+    }
+
     companion object {
         private const val EXTRA_URI = "extra_uri"
         private const val EXTRA_NAME = "extra_name"
         private const val EXTRA_IS_VIDEO = "extra_is_video"
+        private const val EXTRA_MIME_TYPE = "extra_mime_type"
 
         fun intentFor(context: Context, item: GalleryMediaItem): Intent {
             return Intent(context, PreviewActivity::class.java)
                 .putExtra(EXTRA_URI, item.uri.toString())
                 .putExtra(EXTRA_NAME, item.displayName)
                 .putExtra(EXTRA_IS_VIDEO, item.isVideo)
+                .putExtra(EXTRA_MIME_TYPE, item.mimeType)
         }
     }
 }

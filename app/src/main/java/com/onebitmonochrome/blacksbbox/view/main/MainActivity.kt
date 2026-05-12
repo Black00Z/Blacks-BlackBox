@@ -542,7 +542,7 @@ class MainActivity : LoadingActivity() {
                 R.id.fake_location -> {
                     
                     val intent = Intent(this, FakeManagerActivity::class.java)
-                    intent.putExtra("userID", 0)
+                    intent.putExtra("userID", currentUser)
                     startActivity(intent)
                 }
                 R.id.device_spoofing -> {

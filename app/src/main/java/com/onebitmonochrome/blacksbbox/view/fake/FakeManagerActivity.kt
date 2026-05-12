@@ -128,9 +128,16 @@ class FakeManagerActivity : BaseActivity() {
                     val latitude = data.getDoubleExtra("latitude", 0.0)
                     val longitude = data.getDoubleExtra("longitude", 0.0)
                     val pkg = data.getStringExtra("pkg")
+                    if (pkg.isNullOrBlank()) {
+                        toast("Fake location failed: missing target package")
+                        loadAppList()
+                        return@registerForActivityResult
+                    }
 
-                    viewModel.setPattern(currentUserID(), pkg.toString(), BLocationManager.OWN_MODE)
-                    viewModel.setLocation(currentUserID(), pkg.toString(), BLocation(latitude, longitude))
+                    // Do synchronous Binder calls, then refresh list.
+                    // ViewModel path is async and could race the immediate reload.
+                    BLocationManager.get().setLocation(currentUserID(), pkg, BLocation(latitude, longitude))
+                    BLocationManager.get().setPattern(currentUserID(), pkg, BLocationManager.OWN_MODE)
 
                     toast(getString(R.string.set_location,latitude.toString(), longitude.toString()))
 

@@ -106,7 +106,18 @@ class ListActivity : BaseActivity() {
 
     private val openDocumentedResult =
             registerForActivityResult(ActivityResultContracts.GetContent()) {
-                it?.run { finishWithResult(it.toString()) }
+                it?.run {
+                    val raw = it.toString()
+                    val fixed =
+                            when {
+                                raw.startsWith("/content:/") -> "content://" + raw.removePrefix("/content:/")
+                                raw.startsWith("content:/") && !raw.startsWith("content://") -> "content://" + raw.removePrefix("content:/")
+                                raw.startsWith("/file:/") -> "file://" + raw.removePrefix("/file:/")
+                                raw.startsWith("file:/") && !raw.startsWith("file://") -> "file://" + raw.removePrefix("file:/")
+                                else -> raw
+                            }
+                    finishWithResult(fixed)
+                }
             }
 
     private fun finishWithResult(source: String) {
@@ -127,7 +138,8 @@ class ListActivity : BaseActivity() {
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         if (item.itemId == R.id.list_choose) {
-            openDocumentedResult.launch("application/vnd.android.package-archive")
+            // Allow .apk and bundle-based installers (.apks) to be selectable. We validate at install time.
+            openDocumentedResult.launch("*/*")
         }
         return true
     }

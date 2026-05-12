@@ -27,6 +27,7 @@ import top.niunaijun.blackbox.app.BActivityThread;
 public class CrashMonitor {
     private static final String TAG = "CrashMonitor";
     private static boolean sIsInitialized = false;
+    private static volatile Thread.UncaughtExceptionHandler sPrevUncaughtHandler;
     
     
     private static final AtomicInteger sTotalCrashes = new AtomicInteger(0);
@@ -136,11 +137,42 @@ public class CrashMonitor {
     
     private static void installGlobalCrashHandlers() {
         try {
-            
+            final Thread.UncaughtExceptionHandler prev = Thread.getDefaultUncaughtExceptionHandler();
+            sPrevUncaughtHandler = prev;
+
             Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
                 @Override
                 public void uncaughtException(Thread thread, Throwable throwable) {
                     handleCrash("JavaException", thread, throwable);
+
+                    // Never swallow guest-app crashes: swallowing leaves app in black-screen limbo.
+                    // Delegate to previous handler so Android can terminate process and log real crash.
+                    try {
+                        String pkg = getCurrentPackageName();
+                        String hostPkg = BlackBoxCore.getHostPkg();
+                        boolean isGuestApp = pkg != null && hostPkg != null && !hostPkg.equals(pkg);
+                        if (isGuestApp) {
+                            // Log full stack to logcat for debugging (file log may be hard to fetch).
+                            try {
+                                Slog.e(TAG, "Guest app crash stack (" + pkg + "):\n" + getStackTrace(throwable));
+                            } catch (Throwable ignored) {
+                            }
+
+                            // Force terminate guest process to avoid black-screen limbo.
+                            android.os.Process.killProcess(android.os.Process.myPid());
+                            System.exit(10);
+                        }
+                    } catch (Throwable ignored) {
+                        // Fall through to previous handler.
+                    }
+
+                    // Host process: keep previous behavior if we decide to recover later, but still
+                    // delegate to previous handler when present to avoid silent broken state.
+                    Thread.UncaughtExceptionHandler h = sPrevUncaughtHandler;
+                    if (h != null && h != this) {
+                        h.uncaughtException(thread, throwable);
+                        return;
+                    }
                 }
             });
             

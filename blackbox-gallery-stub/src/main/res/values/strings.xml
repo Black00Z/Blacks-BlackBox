@@ -1,9 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">BlackBox Gallery</string>
+    <string name="app_name">Black\'s BlackBox Gallery</string>
     <string name="refresh">Refresh</string>
     <string name="delete">Delete</string>
     <string name="delete_failed">Could not delete this media item</string>
+    <string name="share_to_app">Share to app</string>
+    <string name="share_no_targets">No app inside Black\'s BlackBox can receive this media</string>
+    <string name="share_failed">Could not share this media</string>
     <string name="empty_state">No imported media yet.</string>
     <string name="video_badge">VIDEO</string>
 </resources>

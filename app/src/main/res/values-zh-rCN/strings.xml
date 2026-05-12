@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">BlackBox</string>
+    <string name="app_name">Black\'s BlackBox</string>
     <string name="choose">手动选择</string>
     <string name="choose_app">选择应用</string>
     <string name="installed_app">已安装应用</string>

@@ -4,9 +4,12 @@ package com.onebitmonochrome.blacksbbox.view.fake
 import android.app.Activity
 import android.os.Bundle
 import android.view.inputmethod.InputMethodManager
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.preference.PreferenceManager
+import android.view.MenuItem
+import com.onebitmonochrome.blacksbbox.R
 import org.osmdroid.config.Configuration
 import org.osmdroid.events.MapEventsReceiver
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
@@ -28,6 +31,7 @@ class FollowMyLocationOverlay : AppCompatActivity() {
     private val binding: ActivityOsmdroidBinding by inflate()
 
     lateinit var startPoint: GeoPoint
+    private var targetPkg: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -46,8 +50,20 @@ class FollowMyLocationOverlay : AppCompatActivity() {
 
         
         setContentView(binding.root)
+        setSupportActionBar(binding.toolbar)
+        supportActionBar?.setDisplayHomeAsUpEnabled(true)
+        binding.toolbar.inflateMenu(R.menu.menu_fake_location_pick)
+        binding.toolbar.setOnMenuItemClickListener { item ->
+            if (item.itemId == R.id.action_done) {
+                finishWithResult(startPoint)
+                true
+            } else {
+                false
+            }
+        }
 
         val location: BLocation? = intent.getParcelableExtra("location")
+        targetPkg = intent.getStringExtra("pkg")
 
         startPoint = if (location == null) {
             GeoPoint(30.2736, 120.1563)
@@ -81,10 +97,28 @@ class FollowMyLocationOverlay : AppCompatActivity() {
 
         mapController.setCenter(startPoint)
         binding.map.setTileSource(TileSourceFactory.MAPNIK)
+
+        onBackPressedDispatcher.addCallback(
+            this,
+            object : OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() {
+                    finishWithResult(startPoint)
+                }
+            }
+        )
     }
 
     override fun onBackPressed() {
         finishWithResult(startPoint)
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return if (item.itemId == android.R.id.home) {
+            finishWithResult(startPoint)
+            true
+        } else {
+            super.onOptionsItemSelected(item)
+        }
     }
 
     override fun onResume() {
@@ -126,9 +160,11 @@ class FollowMyLocationOverlay : AppCompatActivity() {
     }
 
     private fun finishWithResult(geoPoint: GeoPoint) {
-        intent.putExtra("latitude", geoPoint.latitude)
-        intent.putExtra("longitude", geoPoint.longitude)
-        setResult(Activity.RESULT_OK, intent)
+        val result = android.content.Intent()
+        result.putExtra("latitude", geoPoint.latitude)
+        result.putExtra("longitude", geoPoint.longitude)
+        targetPkg?.let { result.putExtra("pkg", it) }
+        setResult(Activity.RESULT_OK, result)
         val imm: InputMethodManager = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
         window.peekDecorView()?.run {
             imm.hideSoftInputFromWindow(windowToken, 0)

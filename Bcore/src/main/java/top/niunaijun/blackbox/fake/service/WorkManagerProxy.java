@@ -6,6 +6,7 @@ import android.os.Bundle;
 import java.lang.reflect.Method;
 
 import top.niunaijun.blackbox.BlackBoxCore;
+import top.niunaijun.blackbox.app.BActivityThread;
 import top.niunaijun.blackbox.fake.hook.ClassInvocationStub;
 import top.niunaijun.blackbox.fake.hook.MethodHook;
 import top.niunaijun.blackbox.fake.hook.ProxyMethod;
@@ -22,12 +23,39 @@ public class WorkManagerProxy extends ClassInvocationStub {
     @Override
     protected Object getWho() {
         try {
-            Context context = BlackBoxCore.getContext();
-            if (context != null) {
-                
-                Class<?> workManagerClass = Class.forName("androidx.work.WorkManager");
-                Method getInstanceMethod = workManagerClass.getMethod("getInstance", Context.class);
+            Context context = BActivityThread.getApplication();
+            if (context == null) {
+                context = BlackBoxCore.getContext();
+            }
+            if (context == null) {
+                return null;
+            }
+
+            Context appContext = context.getApplicationContext();
+            if (appContext != null) {
+                context = appContext;
+            }
+
+            Class<?> workManagerClass = Class.forName("androidx.work.WorkManager");
+            Method getInstanceMethod = workManagerClass.getMethod("getInstance", Context.class);
+            try {
                 return getInstanceMethod.invoke(null, context);
+            } catch (Throwable getInstanceError) {
+                // Common on virtual/isolated boots: WorkManager not initialized yet.
+                // Try a best-effort default initialize, then retry getInstance.
+                try {
+                    Class<?> configBuilderClass = Class.forName("androidx.work.Configuration$Builder");
+                    Object configBuilder = configBuilderClass.getConstructor().newInstance();
+                    Object config = configBuilderClass.getMethod("build").invoke(configBuilder);
+                    Class<?> configClass = Class.forName("androidx.work.Configuration");
+                    Method initializeMethod = workManagerClass.getMethod("initialize", Context.class, configClass);
+                    initializeMethod.invoke(null, context, config);
+                    return getInstanceMethod.invoke(null, context);
+                } catch (Throwable initError) {
+                    Slog.w(TAG, "Failed to initialize WorkManager (will fall back to null)", initError);
+                    Slog.w(TAG, "Original WorkManager#getInstance error", getInstanceError);
+                    return null;
+                }
             }
         } catch (Exception e) {
             Slog.w(TAG, "Failed to get WorkManager instance", e);

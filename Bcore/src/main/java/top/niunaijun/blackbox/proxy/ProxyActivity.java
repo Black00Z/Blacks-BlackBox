@@ -12,6 +12,7 @@ import top.niunaijun.blackbox.app.BActivityThread;
 import top.niunaijun.blackbox.fake.hook.HookManager;
 import top.niunaijun.blackbox.fake.service.HCallbackProxy;
 import top.niunaijun.blackbox.proxy.record.ProxyActivityRecord;
+import top.niunaijun.blackbox.utils.IntentSanitizer;
 import top.niunaijun.blackbox.proxy.record.ProxyPendingRecord;
 import top.niunaijun.blackbox.utils.Slog;
 
@@ -32,6 +33,7 @@ public class ProxyActivity extends Activity {
         ProxyActivityRecord record = ProxyActivityRecord.create(getIntent());
         if (record.mTarget != null) {
             record.mTarget.setExtrasClassLoader(BlackBoxCore.getApplication().getClassLoader());
+            IntentSanitizer.restoreSanitizedClassExtras(record.mTarget, BActivityThread.getApplication().getClassLoader());
             startActivity(record.mTarget);
             return;
         }
